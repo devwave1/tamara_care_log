@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>AAC Entries</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 1100px; margin: 24px auto; }
+    table { width:100%; border-collapse:collapse; }
+    th, td { border-bottom:1px solid #eee; text-align:left; padding:6px 8px; font-size: 14px; vertical-align: top; }
+    .row { display:flex; gap:12px; margin-bottom:10px; }
+  </style>
+</head>
+<body>
+  <h2>AAC Entries — Tamara</h2>
+
+  <form method="get" class="row">
+    <div>
+      <label>Goal</label>
+      <select name="goal_no">
+        <option value="">All</option>
+        <option value="1" {% if request.args.get('goal_no')=='1' %}selected{% endif %}>1</option>
+        <option value="2" {% if request.args.get('goal_no')=='2' %}selected{% endif %}>2</option>
+        <option value="3" {% if request.args.get('goal_no')=='3' %}selected{% endif %}>3</option>
+      </select>
+    </div>
+    <div>
+      <label>Level</label>
+      <select name="level">
+        <option value="">All</option>
+        {% for l in [-2,-1,0,1,2] %}
+          <option value="{{l}}" {% if request.args.get('level')==l|string %}selected{% endif %}>{{l}}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Start</label>
+      <input type="date" name="start" value="{{ request.args.get('start','') }}">
+    </div>
+    <div>
+      <label>End</label>
+      <input type="date" name="end" value="{{ request.args.get('end','') }}">
+    </div>
+    <div>
+      <button type="submit">Filter</button>
+        <a href="/aac/export.csv" style="margin-left:8px;">Export CSV</a>
+        <a href="/aac/export_raw.csv" style="margin-left:8px; color:red; font-weight:bold;">Export Raw CSV</a>
+      <a href="/aac" style="margin-left:8px;">Back</a>
+    </div>
+  </form>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th><th>Goal</th><th>Level</th><th>Prompting</th>
+        <th>Modeled</th><th>Used</th><th>Observation</th><th>Comments</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in entries %}
+      <tr>
+        <td>{{e.date}}</td>
+        <td>{{e.goal_no}}</td>
+        <td>{{e.attainment_level}}</td>
+        <td>{{e.prompting_level or ''}}</td>
+        <td>{{(e.modeled_words or '')[:60]}}</td>
+        <td>{{(e.used_words or '')[:60]}}</td>
+        <td>{{(e.observation or '')|safe}}</td>
+        <td>{{(e.comments or '')|safe}}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8">No entries.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

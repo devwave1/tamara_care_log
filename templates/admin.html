@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>Admin Panel - User Management</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        <table class="table">
+            <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Approved</th><th>Admin</th><th>Actions</th></tr></thead>
+            <tbody>
+                {% for user in users %}
+                    <tr>
+                        <td>{{ user.id }}</td>
+                        <td>{{ user.username }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>{{ 'Yes' if user.is_approved else 'No' }}</td>
+                        <td>{{ 'Yes' if user.is_admin else 'No' }}</td>
+                        <td>
+                            {% if not user.is_approved %}
+                                <form method="POST" action="{{ url_for('approve_user', user_id=user.id) }}" style="display:inline;">
+                                    <button type="submit" class="btn btn-success btn-sm">Approve</button>
+                                </form>
+                            {% endif %}
+                            <form method="POST" action="{{ url_for('toggle_admin', user_id=user.id) }}" style="display:inline;">
+                                <button type="submit" class="btn btn-{% if user.is_admin %}danger{% else %}success{% endif %} btn-sm">
+                                    {% if user.is_admin %}Remove Admin{% else %}Make Admin{% endif %}
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ url_for('delete_user', user_id=user.id) }}" style="display:inline;">
+                                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure?')">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <a href="{{ url_for('view_logs') }}" class="btn btn-secondary">Back to Logs</a>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

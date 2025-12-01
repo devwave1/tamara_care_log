@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Log Entry</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        form { max-width: 600px; margin: auto; background: #f8f8f8; padding: 1px 20px 20px 20px; border-radius: 8px; }
+        label { display: block; margin-top: 15px; font-weight: bold; }
+        input, select, textarea {
+            width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box;
+        }
+        textarea { height: 60px; }
+        input[type="submit"] { margin-top: 20px; padding: 10px 20px; }
+        .header { text-align: center; margin-bottom: 20px; }
+        .media-preview, .existing-media { 
+            margin-top: 10px; 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); 
+            gap: 10px; 
+        }
+        .media-preview img, .media-preview video, .existing-media img, .existing-media video { 
+            max-width: 200px; 
+            max-height: 200px; 
+            object-fit: cover; 
+            border: 1px solid #ddd; 
+            border-radius: 4px; 
+        }
+        .existing-media img { cursor: pointer; }
+        .btn-add-more { margin-top: 10px; }
+        .media-item { position: relative; }
+        .remove-btn {
+            display: none;
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(255, 0, 0, 0.7);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+            cursor: pointer;
+        }
+        .media-item:hover .remove-btn { display: block; }
+        .modal-img {
+            max-width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body>
+    {% include 'header.html' %}
+
+    <div class="header">
+        <h2>Edit Log Entry</h2>
+    </div>
+
+    <form id="editForm" method="post" enctype="multipart/form-data">
+        <label for="activity_name">Activity:</label>
+        <select name="activity_name" id="activity_name" required>
+            <option value="">Select an Activity</option>
+            <option value="Mood" {% if log.activity_name == "Mood" %}selected{% endif %}>Mood</option>
+            <option value="Sleep Quality" {% if log.activity_name == "Sleep Quality" %}selected{% endif %}>Sleep Quality</option>
+            <option value="Nap Taken" {% if log.activity_name == "Nap Taken" %}selected{% endif %}>Nap Taken</option>
+            <option value="Toilet Tries" {% if log.activity_name == "Toilet Tries" %}selected{% endif %}>Toilet Tries</option>
+            <option value="Accidents" {% if log.activity_name == "Accidents" %}selected{% endif %}>Accidents</option>
+            <option value="Bath/Shower Completed" {% if log.activity_name == "Bath/Shower Completed" %}selected{% endif %}>Bath/Shower Completed</option>
+            <option value="Teeth Brushed" {% if log.activity_name == "Teeth Brushed" %}selected{% endif %}>Teeth Brushed</option>
+            <option value="Walking Ability" {% if log.activity_name == "Walking Ability" %}selected{% endif %}>Walking Ability</option>
+            <option value="Fine Motor Skills" {% if log.activity_name == "Fine Motor Skills" %}selected{% endif %}>Fine Motor Skills</option>
+            <option value="Gross Motor Skills" {% if log.activity_name == "Gross Motor Skills" %}selected{% endif %}>Gross Motor Skills</option>
+            <option value="Communication Level" {% if log.activity_name == "Communication Level" %}selected{% endif %}>Communication Level</option>
+            <option value="Fluid Intake" {% if log.activity_name == "Fluid Intake" %}selected{% endif %}>Fluid Intake (ml)</option>
+            <option value="Meltdowns" {% if log.activity_name == "Meltdowns" %}selected{% endif %}>Meltdowns</option>
+            <option value="Sensory Sensitivities" {% if log.activity_name == "Sensory Sensitivities" %}selected{% endif %}>Sensory Sensitivities</option>
+            <option value="Exercise / Physical Activity" {% if log.activity_name == "Exercise / Physical Activity" %}selected{% endif %}>Exercise / Physical Activity</option>
+            <option value="Menstrual Cycle" {% if log.activity_name == "Menstrual Cycle" %}selected{% endif %}>Menstrual Cycle</option>
+            <option value="Food" {% if log.activity_name == "Food" %}selected{% endif %}>Food</option>
+            <option value="Message for Careers" {% if log.activity_name == "Message for Careers" %}selected{% endif %}>Message for Careers</option>
+            <option value="Health / Medical" {% if log.activity_name == "Health / Medical" %}selected{% endif %}>Health / Medical</option>
+        </select>
+
+        <label for="value-select">Value:</label>
+        <div id="value-container">
+            <select name="value" id="value-select" style="display: none;" {% if log.activity_name in ["Exercise / Physical Activity", "Food"] %}multiple{% endif %}></select>
+            <input type="text" name="value" id="value-text" value="{{ log.value }}">
+            <input type="hidden" name="calculated_value" id="calculated_value" value="{{ log.value if log.activity_name in ['Exercise / Physical Activity', 'Food'] else '' }}">
+        </div>
+
+        <label for="value_type">Value Type:</label>
+        <input type="text" name="value_type" id="value_type" value="{{ log.value_type }}">
+
+        <label for="notes">Notes (optional):</label>
+        <textarea name="notes" id="notes">{{ log.notes }}</textarea>
+
+        <label for="activity_datetime">Time of Activity:</label>
+        <input type="datetime-local" name="activity_datetime" id="activity_datetime"
+               value="{{ log.activity_datetime.strftime('%Y-%m-%dT%H:%M') }}" required>
+
+        <label for="duration">Duration:</label>
+        <select name="duration" id="duration" required>
+            <option value="5" {% if log.duration == "5" %}selected{% endif %}>5 minutes</option>
+            <option value="15" {% if log.duration == "15" %}selected{% endif %}>15 minutes</option>
+            <option value="30" {% if log.duration == "30" %}selected{% endif %}>30 minutes</option>
+            <option value="60" {% if log.duration == "60" %}selected{% endif %}>1 hour</option>
+            <option value="120" {% if log.duration == "120" %}selected{% endif %}>2 hours</option>
+            <option value="150" {% if log.duration == "150" %}selected{% endif %}>2.5 hours</option>
+            <option value="180" {% if log.duration == "180" %}selected{% endif %}>3 hours</option>
+            <option value="210" {% if log.duration == "210" %}selected{% endif %}>3.5 hours</option>
+            <option value="240" {% if log.duration == "240" %}selected{% endif %}>4 hours</option>
+            <option value="270" {% if log.duration == "270" %}selected{% endif %}>4.5 hours</option>
+            <option value="300" {% if log.duration == "300" %}selected{% endif %}>5 hours</option>
+            <option value="240" {% if log.duration == "240" %}selected{% endif %}>Half Day</option>
+            <option value="480" {% if log.duration == "480" %}selected{% endif %}>Full Day</option>
+            <option value="180" {% if log.duration == "180" %}selected{% endif %}>All Morning</option>
+            <option value="180" {% if log.duration == "180" %}selected{% endif %}>All Afternoon</option>
+            <option value="480" {% if log.duration == "480" %}selected{% endif %}>All Night</option>
+            <option value="720" {% if log.duration == "720" %}selected{% endif %}>All Day</option>
+        </select>
+
+        <label>Existing Media:</label>
+        <div class="existing-media" id="existing-media">
+            {% if log.media %}
+                {% for media in log.media %}
+                    <div class="media-item" data-media-id="{{ media.id }}">
+                        {% if '.jpg' in media.path or '.jpeg' in media.path or '.png' in media.path or '.gif' in media.path or '.heic' in media.path %}
+                            <img src="{{ url_for('static', filename=media.path) }}" 
+                                 alt="Existing Media" 
+                                 data-bs-toggle="modal" 
+                                 data-bs-target="#imageModal" 
+                                 data-src="{{ url_for('static', filename=media.path) }}">
+                        {% elif '.mp4' in media.path or '.mov' in media.path %}
+                            <video controls>
+                                <source src="{{ url_for('static', filename=media.path) }}" 
+                                        type="video/{{ media.path.split('.')[-1] }}">
+                                Your browser does not support the video tag.
+                            </video>
+                        {% endif %}
+                        <button class="remove-btn" title="Remove" onclick="deleteMedia({{ media.id }})">×</button>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p>No media uploaded yet.</p>
+            {% endif %}
+        </div>
+
+        <label for="uploadInput">Upload Additional Media (optional):</label>
+        <button type="button" class="btn btn-success btn-add-more" data-bs-toggle="modal" data-bs-target="#uploadModal">Add New Image</button>
+        <div class="media-preview" id="media-preview"></div>
+
+        <input type="submit" value="Update Entry" class="btn btn-primary">
+        <button type="button" class="btn btn-danger mt-3" data-bs-toggle="modal" data-bs-target="#deleteModal">Delete Entry</button>
+    </form>
+
+    <!-- Bootstrap Modal for Image Zoom -->
+    <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img src="" class="modal-img" id="modalImage" alt="Full-size Image">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Upload Modal -->
+    <div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <form id="uploadForm" class="modal-content" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="uploadModalLabel">Upload New Image</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="file" id="uploadInput" name="image" accept="image/*" class="form-control" required>
+                    <input type="hidden" name="log_id" id="uploadEntryId" value="{{ log.id }}">
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Upload</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteModalLabel">Confirm Deletion</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you absolutely sure you want to delete this log entry? This action cannot be undone, and all associated media will also be deleted.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" onclick="confirmDeleteEntry()">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+const activityValues = {
+  "Mood": [
+    { label: "Upset", value: "1" },
+    { label: "Low", value: "2" },
+    { label: "Okay", value: "3" },
+    { label: "Cheerful", value: "4" },
+    { label: "Elated", value: "5" }
+  ],
+  "Sleep Quality": [
+    { label: "Poor", value: "1" },
+    { label: "Fair", value: "2" },
+    { label: "Good", value: "3" },
+    { label: "Excellent", value: "4" }
+  ],
+  "Nap Taken": [
+    { label: "Yes", value: "1" },
+    { label: "No", value: "0" }
+  ],
+  "Toilet Tries": [
+    { label: "Yes Both", value: "4" },
+    { label: "Yes Poo", value: "3" },
+    { label: "Yes Wee", value: "2" },
+    { label: "Tried No Success", value: "1" }
+  ],
+  "Accidents": [
+    { label: "Wet", value: "1" },
+    { label: "Soiled", value: "2" },
+    { label: "Both", value: "3" }
+  ],
+  "Bath/Shower Completed": [
+    { label: "Yes", value: "1" },
+    { label: "No", value: "0" }
+  ],
+  "Teeth Brushed": [
+    { label: "Yes", value: "1" },
+    { label: "No", value: "0" }
+  ],
+  "Walking Ability": [
+    { label: "Needs Help", value: "1" },
+    { label: "Independent", value: "2" }
+  ],
+  "Fine Motor Skills": [
+    { label: "Poor", value: "1" },
+    { label: "Fair", value: "2" },
+    { label: "Good", value: "3" }
+  ],
+  "Gross Motor Skills": [
+    { label: "Poor", value: "1" },
+    { label: "Fair", value: "2" },
+    { label: "Good", value: "3" }
+  ],
+  "Communication Level": [
+    { label: "No communication No observable communication or response", value: "1", description: "No observable communication or response" },
+    { label: "Passive communication Not initiating communication; prompt dependent", value: "2", description: "Not initiating communication; prompt dependent" },
+    { label: "Minimal communication, not directed at others Body language / eye gaze / vocalisations not directed at others", value: "3", description: "Body language / eye gaze / vocalisations not directed at others" },
+    { label: "Directed communication without back-and-forth Gestures, expressions or vocalisations directed at others, but limited exchange", value: "4", description: "Gestures, expressions or vocalisations directed at others, but limited exchange" },
+    { label: "Back and forth communication Engages in two-way interaction using multiple communication methods", value: "5", description: "Engages in two-way interaction using multiple communication methods" }
+  ],
+  "Fluid Intake": [
+    { label: "50ml", value: "1" },
+    { label: "100ml", value: "2" },
+    { label: "200ml", value: "3" },
+    { label: "300ml", value: "4" },
+    { label: "500ml+", value: "5" }
+  ],
+  "Meltdowns": [
+    { label: "None", value: "0" },
+    { label: "Mild", value: "1" },
+    { label: "Moderate", value: "2" },
+    { label: "Severe", value: "3" }
+  ],
+  "Sensory Sensitivities": [
+    { label: "Sound", value: "1" },
+    { label: "Light", value: "2" },
+    { label: "Touch", value: "3" },
+    { label: "Movement", value: "4" }
+  ],
+  "Exercise / Physical Activity": [
+    { label: "Yoga (Low Intensity)", value: "1.5" },
+    { label: "Walking (Light)", value: "2.0" },
+    { label: "Park Play (Light-Moderate)", value: "2.5" },
+    { label: "Riding Bike (Moderate)", value: "3.5" },
+    { label: "Dancing (Moderate-High)", value: "4.2" },
+    { label: "Swimming (Moderate-High)", value: "4.0" },
+    { label: "Gym Workout (Park Equipment)", value: "4.5" },
+    { label: "Trampolining (High Intensity)", value: "5.0" }
+  ],
+  "Menstrual Cycle": [
+    { label: "Spotting", value: "1" },
+    { label: "Medium", value: "2" },
+    { label: "Heavy", value: "3" }
+  ],
+  "Food": [
+    { label: "Protein", value: "1" },
+    { label: "Vegetables", value: "1" },
+    { label: "Carbohydrate", value: "1" },
+    { label: "Fruit", value: "1" },
+    { label: "Cereals", value: "1" },
+    { label: "Other", value: "1" }
+  ],
+  "Message for Careers": [
+    { label: "Message", value: "1" }
+  ],
+  "Health / Medical": [
+    { label: "Medication Taken", value: "1" },
+    { label: "Doctor's Appointment", value: "1" },
+    { label: "Hospital Visit", value: "1" },
+    { label: "Large Bloating", value: "1" },
+    { label: "Less Bloated", value: "1" },
+    { label: "Raynauds Purple Hands or Feet", value: "1" },
+    { label: "Raynauds Red Hands or Feet", value: "1" },
+    { label: "Dribbling allot", value: "1" },
+    { label: "Dribbling Moderate", value: "1" },
+    { label: "Dribbling less", value: "1" },
+    { label: "Other", value: "1" }
+  ]
+};
+
+const activitySelect = document.getElementById("activity_name");
+let valueSelect = document.getElementById("value-select"); // let, because we reassign after cloning
+const valueText = document.getElementById("value-text");
+const valueTypeInput = document.getElementById("value_type");
+const calculatedValueInput = document.getElementById("calculated_value");
+const existingMediaContainer = document.getElementById("existing-media");
+
+// Map display names to keys used in activityValues
+function activityKey(name) {
+  if (!name) return "";
+  if (name.startsWith("Fluid Intake")) return "Fluid Intake"; // handles "Fluid Intake (ml)"
+  return name;
+}
+
+// Keep hidden fields in sync
+function syncMultiFields() {
+  const selectedOptions = Array.from(valueSelect.selectedOptions || []);
+  const labels = selectedOptions.map(opt => opt.textContent);
+  valueTypeInput.value = labels.join(", ");
+
+  const act = activityKey(activitySelect.value);
+
+  if (act === "Exercise / Physical Activity") {
+    const values = selectedOptions.map(opt => parseFloat(opt.value)).filter(v => !isNaN(v));
+    const mean = values.length ? (values.reduce((s, v) => s + v, 0) / values.length).toFixed(2) : "";
+    calculatedValueInput.value = mean;
+    valueText.value = mean;
+  } else if (act === "Food") {
+    const count = selectedOptions.length;
+    calculatedValueInput.value = count ? String(count) : "";
+    valueText.value = count ? String(count) : "";
+  } else {
+    calculatedValueInput.value = "";
+    valueText.value = selectedOptions.map(opt => opt.value).join(",");
+  }
+}
+
+function initializeValueSelect() {
+  const act = activityKey(activitySelect.value);
+  const options = activityValues[act];
+
+  valueSelect.innerHTML = "";
+  valueSelect.removeAttribute("multiple");
+
+  if (options) {
+    if (act === "Exercise / Physical Activity" || act === "Food") {
+      valueSelect.setAttribute("multiple", "multiple");
+    }
+
+    options.forEach(item => {
+      const opt = document.createElement("option");
+      opt.value = item.value;
+      opt.textContent = item.label;
+
+      // Preselect based on existing log
+      if (valueTypeInput.value && valueTypeInput.value.split(",").map(s => s.trim()).includes(item.label)) {
+        opt.selected = true;
+      } else if (valueText.value && valueText.value.split(",").includes(item.value)) {
+        opt.selected = true;
+      }
+
+      valueSelect.appendChild(opt);
+    });
+
+    // Show select, hide text
+    valueSelect.style.display = "block";
+    valueSelect.name = "value";
+    valueSelect.required = true;
+    valueSelect.disabled = false;
+
+    valueText.style.display = "none";
+    valueText.name = "temp";
+    valueText.required = false;
+    valueText.disabled = true;
+
+  } else {
+    // No predefined options → use text input
+    valueSelect.style.display = "none";
+    valueSelect.name = "temp";
+    valueSelect.required = false;
+    valueSelect.disabled = true;
+
+    valueText.style.display = "block";
+    valueText.name = "value";
+    valueText.required = true;
+    valueText.disabled = false;
+  }
+
+  // Sync hidden fields after building options
+  syncMultiFields();
+}
+
+// Initial build + listeners on page load
+initializeValueSelect();
+valueSelect.addEventListener("change", syncMultiFields);
+syncMultiFields();
+
+// On activity change, rebuild select and rebind listeners
+activitySelect.addEventListener("change", () => {
+  initializeValueSelect();
+
+  // Clone to drop old listeners
+  const newValueSelect = valueSelect.cloneNode(true);
+  valueSelect.parentNode.replaceChild(newValueSelect, valueSelect);
+  valueSelect = newValueSelect;
+  valueSelect.addEventListener("change", syncMultiFields);
+
+  syncMultiFields();
+});
+
+
+
+// Resize and upload image
+document.getElementById("uploadForm").addEventListener("submit", async function (e) {
+    e.preventDefault();
+
+    const fileInput = document.getElementById("uploadInput");
+    const imageFile = fileInput.files[0];
+    const logId = document.getElementById("uploadEntryId").value;
+
+    if (!imageFile) {
+        alert("Please select an image.");
+        return;
+    }
+
+    const maxSize = 100 * 1024 * 1024; // 100MB
+    if (imageFile.size > maxSize) {
+        alert(`File "${imageFile.name}" exceeds 100MB. Please select a smaller file.`);
+        return;
+    }
+
+    console.log('Resizing image:', imageFile.name);
+    const resizedBlob = await resizeImage(imageFile, 1024); // Resize to max 1024px width
+    const formData = new FormData();
+    formData.append("image", resizedBlob, imageFile.name);
+    formData.append("log_id", logId);
+
+    try {
+        const res = await fetch("/upload-image", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await res.json();
+        console.log('Upload Response:', data);
+        if (data.success) {
+            alert("Image uploaded successfully!");
+            location.reload();
+        } else {
+            alert("Upload failed: " + (data.error || "Unknown error"));
+        }
+    } catch (err) {
+        console.error('Image Upload Error:', err);
+        alert("Error uploading image: " + err.message);
+    }
+});
+
+// Resize image to maxWidth (keeps aspect ratio)
+function resizeImage(file, maxWidth) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = function (event) {
+            const img = new Image();
+            img.onload = function () {
+                const canvas = document.createElement("canvas");
+                const scale = maxWidth / img.width;
+                canvas.width = maxWidth;
+                canvas.height = img.height * scale;
+                const ctx = canvas.getContext("2d");
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                canvas.toBlob((blob) => {
+                    resolve(blob);
+                }, "image/jpeg", 0.7); // 70% quality
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+document.querySelectorAll('.existing-media img, .media-preview img').forEach(img => {
+    img.addEventListener('click', function () {
+        const modalImage = document.getElementById('modalImage');
+        modalImage.src = this.dataset.src;
+    });
+});
+
+function deleteMedia(mediaId) {
+    if (confirm('Are you sure you want to delete this media?')) {
+        fetch(`/delete-media/${mediaId}`, {
+            method: 'POST'
+        }).then(response => {
+            console.log('Delete Media Response Status:', response.status);
+            if (response.ok) {
+                const mediaItem = document.querySelector(`.media-item[data-media-id="${mediaId}"]`);
+                if (mediaItem) {
+                    mediaItem.remove();
+                }
+                if (!existingMediaContainer.querySelector('.media-item')) {
+                    existingMediaContainer.innerHTML = '<p>No media uploaded yet.</p>';
+                }
+            } else {
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Unknown error');
+                });
+            }
+        }).catch(error => {
+            console.error('Delete Media Error:', error);
+            alert('Error deleting media: ' + error.message);
+        });
+    }
+}
+
+function confirmDeleteEntry() {
+    fetch('/delete-log/{{ log.id }}', {
+        method: 'POST'
+    }).then(response => {
+        console.log('Delete Log Response Status:', response.status);
+        if (response.ok) {
+            window.location.href = '/view-logs';
+        } else {
+            return response.json().then(data => {
+                throw new Error(data.error || 'Unknown error');
+            });
+        }
+    }).catch(error => {
+        console.error('Delete Log Error:', error);
+        alert('Error deleting entry: ' + error.message);
+    });
+}
+
+document.getElementById('editForm').addEventListener("submit", function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    
+    // Log form data for debugging
+    for (let [key, value] of formData.entries()) {
+        console.log(`FormData: ${key} = ${value}`);
+    }
+
+    fetch('/edit-log/{{ log.id }}', {
+        method: 'POST',
+        body: formData
+    }).then(response => {
+        console.log('Edit Log Response Status:', response.status);
+        if (response.ok) {
+            window.location.href = '/view-logs';
+        } else {
+            return response.json().then(data => {
+                throw new Error(data.error || 'Unknown error');
+            });
+        }
+    }).catch(error => {
+        console.error('Edit Log Error:', error);
+        alert('Error updating entry: ' + error.message);
+    });
+});
+
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

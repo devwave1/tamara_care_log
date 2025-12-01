@@ -1,0 +1,4 @@
+Flask
+Flask-SQLAlchemy
+gspread
+oauth2client

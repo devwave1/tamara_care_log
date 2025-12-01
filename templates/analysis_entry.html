@@ -1,0 +1,46 @@
+{% include 'header.html' %}
+
+<h1>Add New Analysis for Tamara</h1>
+<p>Logged in as: {{ session['carer_name'] }}</p>
+
+<form id="analysisForm" method="POST" action="{{ url_for('add_analysis') }}" novalidate>
+  <label for="analysis_text">Analysis Text:</label>
+  <!-- remove `required` here -->
+  <textarea name="analysis_text" id="analysis_text" rows="10" cols="50"></textarea>
+  <button type="submit">Submit Analysis</button>
+</form>
+
+<script src="{{ url_for('static', filename='vendor/tinymce/tinymce.min.js') }}"></script>
+<script>
+tinymce.init({
+  selector: '#analysis_text',
+  license_key: 'gpl',
+  base_url: "{{ url_for('static', filename='vendor/tinymce') }}",
+  suffix: '.min',
+  menubar: false,
+  plugins: 'lists link table code',
+  toolbar: 'undo redo | bold italic underline | bullist numlist | link table | code',
+  height: 520,
+  statusbar: false,
+  branding: false,
+  promotion: false,
+  convert_urls: false,
+  default_link_target: '_blank',
+  rel_list: [{ title: 'Safe', value: 'noopener noreferrer' }],
+  content_style: 'body{font-family:Arial,sans-serif;font-size:14px} h2,h3{margin-top:12px}'
+});
+
+// manual validation + make sure content is pushed back to the textarea
+document.getElementById('analysisForm').addEventListener('submit', function (e) {
+  const ed = tinymce.get('analysis_text');
+  const html = ed ? ed.getContent().trim() : '';
+  // treat empty editor as invalid
+  if (!html || html === '<p></p>' || html === '<p><br></p>') {
+    e.preventDefault();
+    alert('Please enter some analysis text before submitting.');
+    if (ed) ed.focus();
+    return;
+  }
+  if (window.tinymce) tinymce.triggerSave(); // writes HTML into the hidden textarea
+});
+</script>

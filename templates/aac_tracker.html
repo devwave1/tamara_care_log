@@ -1,0 +1,201 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>GAS & AAC Tracker</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 1100px; margin: 24px auto; }
+    .card { border:1px solid #ddd; border-radius:10px; padding:14px; margin-bottom:16px; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; }
+    .col { display:flex; flex-direction:column; gap:6px; min-width: 220px; }
+    .levels button { margin-right:6px; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { border-bottom:1px solid #eee; text-align:left; padding:6px 8px; font-size: 14px; vertical-align: top; }
+    .muted { color:#666; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h2>GAS & AAC Tracker — Tamara</h2>
+
+<div class="card">
+  <form id="aacForm" method="post" action="/aac/save">
+    <div class="row">
+
+      <!-- NEW: hidden goal_no + combined picker -->
+      <input type="hidden" name="goal_no" id="goal_no_input" value="{{ goals[0].goal_no if goals else 1 }}">
+
+      <div class="col" style="min-width:280px;">
+        <label>Attainment (pick goal + level)</label>
+        <select name="attainment_level" id="attainment_picker" required>
+          {% for g in goals %}
+          <optgroup label="Goal {{g.goal_no}} — {{g.competency}}{% if g.short_label %}: {{g.short_label}}{% endif %}">
+            <option value="2"
+                    data-goal="{{g.goal_no}}"
+                    data-desc="+2 Much greater than expected — {{ g.plus2_text }}">
+              Goal {{g.goal_no}} • +2 — Much greater than expected
+            </option>
+            <option value="1"
+                    data-goal="{{g.goal_no}}"
+                    data-desc="+1 Greater than expected — {{ g.plus1_text }}">
+              Goal {{g.goal_no}} • +1 — Greater than expected
+            </option>
+            <option value="0"
+                    data-goal="{{g.goal_no}}"
+                    data-desc="0 Expected — {{ g.zero_text }}">
+              Goal {{g.goal_no}} • 0 — Expected
+            </option>
+            <option value="-1"
+                    data-goal="{{g.goal_no}}"
+                    data-desc="-1 Less than expected — {{ g.minus1_text }}">
+              Goal {{g.goal_no}} • -1 — Less than expected
+            </option>
+            <option value="-2"
+                    data-goal="{{g.goal_no}}"
+                    data-desc="-2 Baseline — {{ g.baseline_text }}">
+              Goal {{g.goal_no}} • -2 — Baseline
+            </option>
+          </optgroup>
+          {% endfor %}
+        </select>
+        <div id="attainment_help" class="muted" style="margin-top:6px;" aria-live="polite"></div>
+
+      </div>
+      <!-- /NEW -->
+
+      <div class="col">
+        <label>Date</label>
+        <input type="datetime-local" name="date" value="{{ now }}">
+      </div>
+      <!--<div class="col">
+        <label>Time of day</label>
+        <input type="text" name="time_of_day" placeholder="Morning / Afternoon / Evening">
+      </div>-->
+      <div class="col">
+        <label>Location</label>
+        <input type="text" name="location" placeholder="Home / Therapy / School">
+      </div>
+      <div class="col">
+        <label>Partner(s)</label>
+        <input type="text" name="partners" placeholder="Who was present">
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:8px;">
+      <div class="col">
+        <label>Device</label>
+        <input type="text" name="device" placeholder="AAC device">
+      </div>
+      <div class="col">
+        <label>Vocabulary</label>
+        <input type="text" name="vocabulary" placeholder="Core/Fringe pages etc.">
+      </div>
+      <div class="col">
+        <label>Trial Window</label>
+        <input type="text" name="trial_window" placeholder="e.g., Week 1, 4-week trial">
+      </div>
+      <div class="col">
+        <label>Prompting level</label>
+        <select name="prompting_level">
+          <option value="">—</option>
+          {% for p in PROMPTING_LEVELS %}
+            <option>{{p}}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:8px;">
+      <div class="col" style="flex:1">
+        <label>What words did I model?</label>
+        <textarea name="modeled_words" rows="2"></textarea>
+      </div>
+      <div class="col" style="flex:1">
+        <label>What words did Tamara use?</label>
+        <textarea name="used_words" rows="2"></textarea>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:8px;">
+      <div class="col" style="flex:1">
+        <label>Observation</label>
+        <textarea name="observation" rows="3"></textarea>
+      </div>
+      <div class="col" style="flex:1">
+        <label>Comments</label>
+        <textarea name="comments" rows="3"></textarea>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <button type="submit">Save Entry</button>
+      <a href="/aac/entries" style="margin-left:8px;">View All Entries</a>
+      <a href="/aac/export.csv" style="margin-left:8px;">Export CSV</a>
+    </div>
+  </form>
+</div>
+
+
+  <div class="card">
+    <h3>Recent Entries</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th><th>Goal</th><th>Level</th><th>Prompting</th><th>Used words</th><th>Observation</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in entries %}
+        <tr>
+          <td>{{e.date}}</td>
+          <td>Goal {{e.goal_no}}</td>
+          <td>{{e.attainment_level}}</td>
+          <td>{{e.prompting_level or ''}}</td>
+          <td>{{(e.used_words or '')[:60]}}</td>
+          <td class="muted">{{(e.observation or '')|safe}}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted">No entries yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    // Simple async POST with fetch to keep you on the page
+    document.getElementById('aacForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const res = await fetch('/aac/save', { method: 'POST', body: fd, credentials: 'include' });
+      const data = await res.json();
+      if (data && data.success) {
+        alert('Saved!');
+        location.reload();
+      } else {
+        alert('Error: ' + (data && data.error ? data.error : 'unknown'));
+      }
+    });
+  </script>
+
+    <script>
+    (function () {
+        const picker = document.getElementById('attainment_picker');
+        const help = document.getElementById('attainment_help');
+        const goalHidden = document.getElementById('goal_no_input');
+
+        function syncFromSelection() {
+        const opt = picker.options[picker.selectedIndex];
+        if (!opt) return;
+        const goal = opt.getAttribute('data-goal');
+        if (goal) goalHidden.value = goal;
+        const desc = opt.getAttribute('data-desc') || '';
+        help.textContent = desc;
+        }
+
+        picker.addEventListener('change', syncFromSelection);
+        syncFromSelection();
+    })();
+    </script>
+
+
+</body>
+</html>

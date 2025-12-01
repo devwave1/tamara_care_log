@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Insights Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .summary-card {
+      padding: 16px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #ecf2ff 0%, #fdfbff 100%);
+      border: 1px solid #d4ddff;
+      box-shadow: 0 6px 16px rgba(50, 71, 179, 0.08);
+    }
+    .summary-card h3 {
+      font-size: 1.8rem;
+      margin: 0;
+      color: #1a2c6b;
+    }
+    .summary-card p {
+      margin: 4px 0 0;
+      color: #425189;
+    }
+    .section-title {
+      margin-top: 40px;
+      margin-bottom: 16px;
+      font-weight: 600;
+      color: #002060;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .section-title span {
+      display: inline-flex;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #dae3ff;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: #2b47a0;
+    }
+    .table thead {
+      background: #002060;
+      color: #fff;
+    }
+    .placeholder-box {
+      border: 1px dashed #9ba6d6;
+      border-radius: 12px;
+      padding: 24px;
+      color: #6c78a8;
+      background: #f5f7ff;
+    }
+    .placeholder-box h4 {
+      color: #364a91;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  {% include 'header.html' %}
+
+  <div class="container-fluid px-0">
+    <div class="d-flex align-items-center justify-content-between flex-wrap">
+      <div>
+        <h1 class="mb-2">Insights Dashboard</h1>
+        <p class="text-muted mb-4">
+          First pass at surfacing relationships across toileting, mood, communication, fluids, food and cycle data.
+          We’ll iterate on this view as we layer in deeper correlations.
+        </p>
+      </div>
+      <div>
+        <a href="{{ url_for('view_logs') }}" class="btn btn-outline-primary">Back to Logs</a>
+      </div>
+    </div>
+
+    <div class="card-grid">
+      <div class="summary-card">
+        <h3>{{ activity_counts|length }}</h3>
+        <p>Tracked activities</p>
+      </div>
+      <div class="summary-card">
+        <h3>{{ recent_mood|length }}</h3>
+        <p>Latest mood entries in scope</p>
+      </div>
+      <div class="summary-card">
+        <h3>{{ recent_comm|length }}</h3>
+        <p>Recent communication observations</p>
+      </div>
+      <div class="summary-card">
+        <h3>Work in progress</h3>
+        <p>Predictors & correlations coming soon</p>
+      </div>
+    </div>
+
+    <h2 class="section-title"><span>1</span>Activity volume snapshot</h2>
+    <div class="table-responsive">
+      <table class="table table-striped align-middle">
+        <thead>
+          <tr>
+            <th scope="col">Activity</th>
+            <th scope="col" class="text-end">Entries</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for activity, count in activity_counts %}
+            <tr>
+              <td>{{ activity }}</td>
+              <td class="text-end">{{ count }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="2" class="text-center text-muted">No activity data yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <h2 class="section-title"><span>2</span>Recent mood check-ins</h2>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th scope="col">Logged at</th>
+            <th scope="col">Mood score</th>
+            <th scope="col">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in recent_mood %}
+            <tr>
+              <td>{{ entry.activity_datetime.strftime('%Y-%m-%d %H:%M') }}</td>
+              <td>{{ entry.value }}</td>
+              <td>{{ entry.notes or '—' }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="3" class="text-center text-muted">No mood entries logged yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <h2 class="section-title"><span>3</span>Communication level highlights</h2>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th scope="col">Logged at</th>
+            <th scope="col">Level</th>
+            <th scope="col">Value type</th>
+            <th scope="col">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in recent_comm %}
+            <tr>
+              <td>{{ entry.activity_datetime.strftime('%Y-%m-%d %H:%M') }}</td>
+              <td>{{ entry.value }}</td>
+              <td>{{ entry.value_type or '—' }}</td>
+              <td>{{ entry.notes or '—' }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4" class="text-center text-muted">No communication logs yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <h2 class="section-title"><span>4</span>Daily feature snapshot</h2>
+    <div class="mb-4">
+      <canvas id="toiletFluidChart" height="120"></canvas>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-bordered align-middle">
+        <thead>
+          <tr>
+            <th scope="col">Date</th>
+            <th scope="col">Good Day Score</th>
+            <th scope="col">Mood Avg</th>
+            <th scope="col">Sleep Avg</th>
+            <th scope="col">Communication Avg</th>
+            <th scope="col">Posture Avg</th>
+            <th scope="col">Posture Label</th>
+            <th scope="col">Toilet (succ / attempts)</th>
+            <th scope="col">Accidents</th>
+            <th scope="col">Fluid (ml)</th>
+            <th scope="col">Menstrual</th>
+            <th scope="col">Meltdown</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in feature_rows %}
+            <tr>
+              <td>{{ row.date }}</td>
+              <td>{{ row.good_day_score }}</td>
+              <td>{{ row.mood_avg if row.mood_avg is not none else '—' }}</td>
+              <td>{{ row.sleep_avg if row.sleep_avg is not none else '—' }}</td>
+              <td>{{ row.communication_avg if row.communication_avg is not none else '—' }}</td>
+              <td>{{ row.posture_avg if row.posture_avg is not none else '—' }}</td>
+              <td>{{ row.posture_label or '—' }}</td>
+              <td>
+                {% if row.toilet_attempts %}
+                  {{ row.toilet_success }} / {{ row.toilet_attempts }}{% if row.toilet_success_rate is not none %} ({{ (row.toilet_success_rate * 100)|round(0) }}%){% endif %}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>{{ row.accidents }}</td>
+              <td>{{ row.fluid_ml }}</td>
+              <td>{{ row.menstrual_level or '—' }}</td>
+              <td>{{ row.meltdown_level or '—' }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="12" class="text-center text-muted">No aggregated data yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <h2 class="section-title"><span>5</span>Upcoming analysis layers</h2>
+    <div class="placeholder-box">
+      <h4>In the next iteration we’ll add:</h4>
+      <ul class="mb-0">
+        <li>Outcome scoring (good day vs challenging day) with contributing factors</li>
+        <li>Hydration & meal timing vs toileting success visualisation</li>
+        <li>Mood/Sleep impact on communication and walking ability</li>
+        <li>Menstrual cycle overlays across mood, meltdowns and health notes</li>
+        <li>CSV export of the aggregated feature set for deeper offline analysis</li>
+      </ul>
+    </div>
+  </div>
+</body>
+<script>
+  (async function initToiletFluidChart() {
+    const canvas = document.getElementById('toiletFluidChart');
+    if (!canvas) return;
+
+    try {
+      const resp = await fetch('/analysis/data');
+      if (!resp.ok) {
+        console.warn('Unable to load analysis data:', resp.status);
+        return;
+      }
+      const payload = await resp.json();
+      const features = payload?.features || [];
+      if (!features.length) {
+        canvas.parentElement.innerHTML = '<div class="alert alert-info">No data available for the selected period yet.</div>';
+        return;
+      }
+
+      const labels = features.map(row => row.date);
+      const successRates = features.map(row =>
+        row.toilet_success_rate !== null ? Math.round(row.toilet_success_rate * 100) : null
+      );
+      const fluidTotals = features.map(row => row.fluid_ml || 0);
+
+      const ctx = canvas.getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            {
+              type: 'line',
+              label: 'Toilet Success Rate (%)',
+              data: successRates,
+              yAxisID: 'ySuccess',
+              borderColor: '#1f77b4',
+              backgroundColor: '#1f77b4',
+              tension: 0.3,
+              spanGaps: true,
+            },
+            {
+              type: 'bar',
+              label: 'Fluid Intake (ml)',
+              data: fluidTotals,
+              yAxisID: 'yFluid',
+              backgroundColor: 'rgba(255, 159, 64, 0.5)',
+              borderColor: 'rgb(255, 159, 64)',
+              borderWidth: 1,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false,
+          },
+          stacked: false,
+          scales: {
+            x: {
+              ticks: { maxRotation: 0, minRotation: 0 },
+            },
+            ySuccess: {
+              type: 'linear',
+              position: 'left',
+              beginAtZero: true,
+              max: 100,
+              title: { display: true, text: 'Success Rate (%)' },
+            },
+            yFluid: {
+              type: 'linear',
+              position: 'right',
+              beginAtZero: true,
+              title: { display: true, text: 'Fluid Intake (ml)' },
+              grid: { drawOnChartArea: false },
+            },
+          },
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label(ctx) {
+                  const label = ctx.dataset.label || '';
+                  if (ctx.dataset.yAxisID === 'ySuccess') {
+                    return `${label}: ${ctx.parsed.y ?? '—'}%`;
+                  }
+                  return `${label}: ${ctx.parsed.y ?? 0} ml`;
+                },
+              },
+            },
+          },
+        },
+      });
+    } catch (err) {
+      console.error('Failed to build toilet vs fluid chart:', err);
+    }
+  })();
+</script>
+</html>
+

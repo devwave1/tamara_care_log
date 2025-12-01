@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Edit Analysis</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .container { max-width: 900px; }
+  </style>
+</head>
+<body>
+  {% include 'header.html' %}
+  <div class="container my-4">
+    <h1 class="h3 mb-3">Edit Analysis</h1>
+    <p class="text-muted mb-4">
+      Created: {{ analysis.created_at.strftime('%Y-%m-%d %H:%M') }} by <strong>{{ analysis.carer_name }}</strong>
+    </p>
+
+    <form id="analysisForm" method="POST" action="{{ url_for('edit_analysis', analysis_id=analysis.id) }}" novalidate>
+      <label for="analysis_text" class="form-label">Analysis Text</label>
+      <!-- Use |safe so TinyMCE loads formatted HTML. It's already sanitized on save. -->
+      <textarea name="analysis_text" id="analysis_text" rows="12" class="form-control">{{ analysis.analysis_text | safe }}</textarea>
+
+      <div class="d-flex gap-2 mt-3">
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+
+        <form method="POST" action="{{ url_for('delete_analysis', analysis_id=analysis.id) }}"
+              onsubmit="return confirm('Delete this analysis? This cannot be undone.');">
+          <button type="submit" class="btn btn-danger">Delete</button>
+        </form>
+
+        <a class="btn btn-secondary" href="{{ url_for('view_analyses') }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- TinyMCE (self-hosted) -->
+  <script src="{{ url_for('static', filename='vendor/tinymce/tinymce.min.js') }}"></script>
+  <script>
+    tinymce.init({
+      selector: '#analysis_text',
+      license_key: 'gpl',                       // avoids “license key” banner
+      base_url: "{{ url_for('static', filename='vendor/tinymce') }}",
+      suffix: '.min',
+      menubar: false,
+      plugins: 'lists link table code',
+      toolbar: 'undo redo | bold italic underline | bullist numlist | link table | code',
+      height: 520,
+      statusbar: false,
+      branding: false,
+      promotion: false,
+      convert_urls: false,
+      default_link_target: '_blank',
+      rel_list: [{ title: 'Safe', value: 'noopener noreferrer' }],
+      content_style: 'body{font-family:Arial,sans-serif;font-size:14px} h2,h3{margin-top:12px}'
+    });
+
+    // Validate + push editor HTML back into textarea before submit
+    document.getElementById('analysisForm').addEventListener('submit', function (e) {
+      const ed = tinymce.get('analysis_text');
+      const html = ed ? ed.getContent().trim() : '';
+      if (!html || html === '<p></p>' || html === '<p><br></p>') {
+        e.preventDefault();
+        alert('Please enter some analysis text before saving.');
+        ed && ed.focus();
+        return;
+      }
+      tinymce.triggerSave();
+    });
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

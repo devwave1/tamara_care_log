@@ -1,0 +1,362 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>View Logs</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .table-responsive { overflow-x: auto; } /* Enable horizontal scroll on small screens */
+    table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+    th, td { padding: 8px 12px; border: 1px solid #ccc; } /* Prevent text wrapping */
+    th { background-color: #f5f5f5; }
+    .form-section { margin-bottom: 20px; }
+    label { font-weight: bold; margin-right: 10px; }
+    input, select { padding: 5px; margin-right: 10px; }
+    .chart-controls { margin: 10px 0; }
+    .media-link { margin-left: 10px; }
+    .chart-container { position: relative; max-width: 100%; height: auto; margin-bottom: 20px; } /* Responsive chart wrapper */
+    @media (max-width: 576px) {
+      .chart-container canvas { max-height: 200px; } /* Limit chart height on mobile */
+    }
+    .chart-container {
+        min-height: 600px;
+   }
+    body { font-family: Arial, sans-serif; margin: 20px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+  th, td { padding: 8px 12px; border: 1px solid #ccc; }
+  th { background-color: #f5f5f5; }
+  .form-section { margin-bottom: 20px; }
+  label { font-weight: bold; margin-right: 10px; }
+  input, select { padding: 5px; margin-right: 10px; }
+  .chart-controls { margin: 10px 0; }
+  .media-link { margin-left: 10px; }
+  .table-responsive { overflow-x: auto; } /* Keep for mobile scrolling */
+  .custom-logs-table .date-time-col { width: 120px; } /* Adjust as needed */
+  .custom-logs-table .carer-col { width: 80px; }
+  .custom-logs-table .activity-col { width: 150px; }
+  .custom-logs-table .value-col { width: 60px; }
+  .custom-logs-table .value-type-col { width: 120px; }
+  .custom-logs-table .notes-col { width: 200px; } /* Allow growth with content */
+  .custom-logs-table .duration-col { width: 80px; }
+  .custom-logs-table .media-col { width: 120px; }
+  .custom-logs-table .edit-col { width: 80px; }
+  /* Optional: Allow content to wrap if desired */
+  .custom-logs-table td, .custom-logs-table th {
+    word-wrap: break-word; /* Legacy support */
+    overflow-wrap: break-word; /* Modern standard */
+  }
+
+  </style>
+</head>
+<body>
+  {% include 'header.html' %}
+
+  <h1>Care Log Analysis</h1>
+
+  <form method="get" action="/view-logs" class="form-section" id="filterForm">
+    <label for="activity">Activity:</label>
+    <select name="activity" id="activity">
+      <option value="">-- All Activities --</option>
+      <option value="Mood" {% if request.args.get('activity') == 'Mood' %}selected{% endif %}>Mood</option>
+      <option value="Sleep Quality" {% if request.args.get('activity') == 'Sleep Quality' %}selected{% endif %}>Sleep Quality</option>
+      <option value="Nap Taken" {% if request.args.get('activity') == 'Nap Taken' %}selected{% endif %}>Nap Taken</option>
+      <option value="Toilet Tries" {% if request.args.get('activity') == 'Toilet Tries' %}selected{% endif %}>Toilet Tries</option>
+      <option value="Accidents" {% if request.args.get('activity') == 'Accidents' %}selected{% endif %}>Accidents</option>
+      <option value="Bath/Shower Completed" {% if request.args.get('activity') == 'Bath/Shower Completed' %}selected{% endif %}>Bath/Shower Completed</option>
+      <option value="Teeth Brushed" {% if request.args.get('activity') == 'Teeth Brushed' %}selected{% endif %}>Teeth Brushed</option>
+      <option value="Walking Ability" {% if request.args.get('activity') == 'Walking Ability' %}selected{% endif %}>Walking Ability</option>
+      <option value="Fine Motor Skills" {% if request.args.get('activity') == 'Fine Motor Skills' %}selected{% endif %}>Fine Motor Skills</option>
+      <option value="Gross Motor Skills" {% if request.args.get('activity') == 'Gross Motor Skills' %}selected{% endif %}>Gross Motor Skills</option>
+      <option value="Communication Level" {% if request.args.get('activity') == 'Communication Level' %}selected{% endif %}>Communication Level</option>
+      <option value="Fluid Intake" {% if request.args.get('activity') == 'Fluid Intake' %}selected{% endif %}>Fluid Intake (ml)</option>
+      <option value="Meltdowns" {% if request.args.get('activity') == 'Meltdowns' %}selected{% endif %}>Meltdowns</option>
+      <option value="Sensory Sensitivities" {% if request.args.get('activity') == 'Sensory Sensitivities' %}selected{% endif %}>Sensory Sensitivities</option>
+      <option value="Exercise / Physical Activity" {% if request.args.get('activity') == 'Exercise / Physical Activity' %}selected{% endif %}>Exercise / Physical Activity</option>
+      <option value="Menstrual Cycle" {% if request.args.get('activity') == 'Menstrual Cycle' %}selected{% endif %}>Menstrual Cycle</option>
+      <option value="Food" {% if request.args.get('activity') == 'Food' %}selected{% endif %}>Food</option>
+      <option value="Message for Careers" {% if request.args.get('activity') == 'Message for Careers' %}selected{% endif %}>Message for Careers</option>
+      <option value="Health / Medical" {% if request.args.get('activity') == 'Health / Medical' %}selected{% endif %}>Health / Medical</option>
+    </select>
+
+    <label for="carer_name">Carer:</label>
+    <select name="carer_name" id="carer_name">
+      <option value="">-- All Carers --</option>
+      {% for carer in carer_names %}
+        <option value="{{ carer }}" {% if selected_carer == carer %}selected{% endif %}>{{ carer }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="start_date">From:</label>
+    <input type="date" name="start_date" id="start_date" value="{{ request.args.get('start_date') }}">
+
+    <label for="end_date">To:</label>
+    <input type="date" name="end_date" id="end_date" value="{{ request.args.get('end_date') }}">
+
+    <button type="submit">Filter</button>
+    <button type="button" id="clearFilters" class="btn btn-secondary">Clear Filters</button>
+  </form>
+
+  <div class="chart-controls">
+    <button type="button" id="hideAll" class="btn btn-warning">Hide All</button>
+  </div>
+  <div class="chart-container">
+    <canvas id="logChart" height="100"></canvas>
+  </div>
+
+  <h2>Log Entries</h2>
+<div class="table-responsive"> <!-- Keep this wrapper for scrolling if needed -->
+  <table class="custom-logs-table">
+    <thead>
+      <tr>
+        <th class="date-time-col">Date & Time</th>
+        <th class="carer-col">Carer</th>
+        <th class="activity-col">Activity</th>
+        <th class="value-col">Value</th>
+        <th class="value-type-col">Value Type</th>
+        <th class="notes-col">Notes</th>
+        <th class="duration-col">Duration</th>
+        <th class="media-col">Media</th>
+        <th class="edit-col">Edit</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in logs|sort(attribute='activity_datetime', reverse=True) %}
+        <tr>
+          <td class="date-time-col">{{ log.activity_datetime.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td class="carer-col">{{ log.carer_name }}</td>
+          <td class="activity-col">{{ log.activity_name }}</td>
+          <td class="value-col">{{ log.value }}</td>
+          <td class="value-type-col">{{ log.display_value }}</td>
+          <td class="notes-col">{{ log.notes }}</td>
+          <td class="duration-col">{{ log.duration or '' }}</td>
+          <td class="media-col">
+            {% if log.media %}
+              <a href="{{ url_for('view_media', log_id=log.id) }}" class="media-link">View Media</a>
+            {% else %}
+              None
+            {% endif %}
+            <br>
+            <button type="button" class="btn btn-sm btn-success mt-1" data-bs-toggle="modal" data-bs-target="#uploadModal" onclick="openUploadModal({{ log.id }})">Add New Image</button>
+          </td>
+          <td class="edit-col"><a href="{{ url_for('edit_log', log_id=log.id) }}">Edit</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9">No entries found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+  </div>
+
+  <!-- Upload Modal -->
+  <div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <form id="uploadForm" class="modal-content" enctype="multipart/form-data">
+        <div class="modal-header">
+          <h5 class="modal-title" id="uploadModalLabel">Upload New Image</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="file" id="uploadInput" name="image" accept="image/*" class="form-control" required>
+          <input type="hidden" name="log_id" id="uploadEntryId">
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Upload</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const chartLabels = {{ labels | tojson | safe }};
+    const rawDatasets = {{ datasets | tojson | safe }};
+
+    const ctx = document.getElementById('logChart').getContext('2d');
+
+    const weekShadingPlugin = {
+      id: 'weekShading',
+      beforeDraw(chart) {
+        const { ctx, chartArea, scales } = chart;
+        const xScale = scales.x;
+        const yScale = scales.y;
+        ctx.save();
+        const dates = chartLabels.map(label => new Date(label));
+        if (dates.length === 0) return;
+        const minDate = new Date(Math.min(...dates));
+        const maxDate = new Date(Math.max(...dates));
+        function getWeekStart(date) {
+          const d = new Date(date);
+          const day = d.getDay();
+          const diff = (day === 0 ? 6 : day - 1);
+          d.setDate(d.getDate() - diff);
+          d.setHours(0, 0, 0, 0);
+          return d;
+        }
+        let currentWeekStart = getWeekStart(minDate);
+        let weekNumber = 0;
+        while (currentWeekStart <= maxDate) {
+          const nextWeekStart = new Date(currentWeekStart);
+          nextWeekStart.setDate(nextWeekStart.getDate() + 7);
+          const xStart = xScale.getPixelForValue(currentWeekStart.getTime());
+          const xEnd = xScale.getPixelForValue(Math.min(nextWeekStart.getTime(), maxDate.getTime()));
+          if (weekNumber % 2 === 0) {
+            ctx.fillStyle = 'rgba(255, 255, 224, 0.3)';
+            ctx.fillRect(xStart, chartArea.top, xEnd - xStart, chartArea.bottom - chartArea.top);
+          }
+          currentWeekStart = nextWeekStart;
+          weekNumber++;
+        }
+        ctx.restore();
+      }
+    };
+
+    const chart = new Chart(ctx, {
+      type: 'bar',
+      data: { labels: chartLabels, datasets: rawDatasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false, // Allow height adjustment
+        spanGaps: true,
+        scales: {
+          x: { display: true, title: { display: true, text: 'Date' }},
+          y: { beginAtZero: true, title: { display: true, text: 'Value' }}
+        },
+        plugins: {
+          legend: {
+            labels: {
+              color: 'black',
+              generateLabels: function(chart) {
+                const data = chart.data;
+                if (data.datasets.length) {
+                  return data.datasets.map((dataset, i) => ({
+                    text: dataset.label,
+                    fillStyle: dataset.backgroundColor,
+                    strokeStyle: dataset.borderColor,
+                    lineWidth: dataset.borderWidth,
+                    hidden: !chart.isDatasetVisible(i),
+                    datasetIndex: i
+                  }));
+                }
+                return [];
+              }
+            },
+            onClick: function(e, legendItem) {
+              const index = legendItem.datasetIndex;
+              const ci = this.chart;
+              const meta = ci.getDatasetMeta(index);
+              meta.hidden = meta.hidden === null ? !ci.data.datasets[index].hidden : null;
+              ci.update();
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const dataset = context.dataset;
+                const dataPoint = dataset.data[context.dataIndex];
+                let label = `${dataset.label}: ${dataPoint.y}`;
+                if (dataPoint.value_type) label += ` (${dataPoint.value_type})`;
+                if (dataPoint.notes) label += `, Notes: ${dataPoint.notes}`;
+                if (dataPoint.duration) label += `, Duration: ${dataPoint.duration}`;
+                return label;
+              }
+            }
+          }
+        }
+      },
+      plugins: [weekShadingPlugin]
+    });
+
+    document.getElementById('hideAll').addEventListener('click', function() {
+      chart.data.datasets.forEach((dataset, index) => {
+        const meta = chart.getDatasetMeta(index);
+        meta.hidden = !meta.hidden;
+      });
+      chart.update();
+      this.textContent = chart.data.datasets.every(dataset => chart.getDatasetMeta(dataset.datasetIndex).hidden)
+        ? 'Show All' : 'Hide All';
+    });
+
+    document.getElementById('clearFilters').addEventListener('click', function() {
+      window.location.href = '/view-logs';
+    });
+
+    function openUploadModal(entryId) {
+      document.getElementById('uploadEntryId').value = entryId;
+      const modal = new bootstrap.Modal(document.getElementById('uploadModal'));
+      modal.show();
+    }
+
+    document.getElementById("uploadForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const fileInput = document.getElementById("uploadInput");
+      const imageFile = fileInput.files[0];
+      const logId = document.getElementById("uploadEntryId").value;
+
+      if (!imageFile) {
+        alert("Please select an image.");
+        return;
+      }
+
+      const maxSize = 100 * 1024 * 1024; // 100MB
+      if (imageFile.size > maxSize) {
+        alert(`File "${imageFile.name}" exceeds 100MB. Please select a smaller file.`);
+        return;
+      }
+
+      console.log('Resizing image:', imageFile.name);
+      const resizedBlob = await resizeImage(imageFile, 1024); // Resize to max 1024px width
+      const formData = new FormData();
+      formData.append("image", resizedBlob, imageFile.name);
+      formData.append("log_id", logId);
+
+      try {
+        const res = await fetch("/upload-image", {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await res.json();
+        console.log('Upload Response:', data);
+        if (data.success) {
+          alert("Image uploaded successfully!");
+          location.reload();
+        } else {
+          alert("Upload failed: " + (data.error || "Unknown error"));
+        }
+      } catch (err) {
+        console.error('Image Upload Error:', err);
+        alert("Error uploading image: " + err.message);
+      }
+    });
+
+    function resizeImage(file, maxWidth) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = function (event) {
+          const img = new Image();
+          img.onload = function () {
+            const canvas = document.createElement("canvas");
+            const scale = maxWidth / img.width;
+            canvas.width = maxWidth;
+            canvas.height = img.height * scale;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob((blob) => {
+              resolve(blob);
+            }, "image/jpeg", 0.7); // 70% quality
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

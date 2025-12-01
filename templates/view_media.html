@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Media for Log Entry</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f8f8f8;
+        }
+        .media-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .media-item img, .media-item video {
+            max-width: 100%;
+            max-height: 200px;
+            object-fit: cover;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .media-item {
+            text-align: center;
+        }
+        .no-media {
+            text-align: center;
+            color: #6c757d;
+            font-style: italic;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .modal-img {
+            max-width: 100%;
+            max-height: 80vh;
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body>
+    {% include 'header.html' %}
+
+    <div class="header">
+        <h2>Media for Log Entry: {{ log.activity_name }} on {{ log.activity_datetime.strftime('%Y-%m-%d %H:%M') }}</h2>
+    </div>
+
+    <div class="container">
+
+        <div class="text-center mb-3">
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#uploadModal">Add New Image</button>
+        </div>
+
+        {% if media_list %}
+            <div class="media-container">
+                {% for media in media_list %}
+                    <div class="media-item">
+                        {% if '.jpg' in media.path or '.jpeg' in media.path or '.png' in media.path or '.gif' in media.path %}
+                            <img src="{{ url_for('static', filename=media.path) }}" 
+                                 alt="Log Media" 
+                                 data-bs-toggle="modal" 
+                                 data-bs-target="#imageModal" 
+                                 data-src="{{ url_for('static', filename=media.path) }}">
+                        {% elif '.mp4' in media.path or '.mov' in media.path %}
+                            <video controls>
+                                <source src="{{ url_for('static', filename=media.path) }}" 
+                                        type="video/{{ media.path.split('.')[-1] }}">
+                                Your browser does not support the video tag.
+                            </video>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="no-media">No media available for this entry.</p>
+        {% endif %}
+
+        <div class="mt-4 text-center">
+            <a href="{{ url_for('view_logs') }}" class="btn btn-primary">Back to Logs</a>
+        </div>
+    </div>
+
+    <!-- Image Upload Modal -->
+    <div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <form id="uploadForm" class="modal-content" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="uploadModalLabel">Upload New Image</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="file" id="uploadInput" name="image" accept="image/*" class="form-control" required>
+                    <input type="hidden" name="log_id" value="{{ log.id }}">
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Upload</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Image Zoom Modal -->
+    <div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="imageModalLabel">Image Preview</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img src="" class="modal-img" id="modalImage" alt="Full-size Image">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Set image preview in modal
+        document.querySelectorAll('.media-item img').forEach(img => {
+            img.addEventListener('click', function () {
+                const modalImage = document.getElementById('modalImage');
+                modalImage.src = this.dataset.src;
+            });
+        });
+
+        // Handle image upload
+
+    // Resize and upload image
+    document.getElementById("uploadForm").addEventListener("submit", async function (e) {
+        e.preventDefault();
+
+        const fileInput = document.getElementById("uploadInput");
+        const imageFile = fileInput.files[0];
+        const logId = document.querySelector('input[name="log_id"]').value;
+
+        if (!imageFile) {
+            alert("Please select an image.");
+            return;
+        }
+
+        const resizedBlob = await resizeImage(imageFile, 1024);  // Resize to max 1024px width
+        const formData = new FormData();
+        formData.append("image", resizedBlob, imageFile.name);
+        formData.append("log_id", logId);
+
+        try {
+            const res = await fetch("/upload-image", {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                alert("Image uploaded successfully!");
+                location.reload();
+            } else {
+                alert("Upload failed: " + data.error);
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Error uploading image.");
+        }
+    });
+
+    // Resize image to maxWidth (keeps aspect ratio)
+    function resizeImage(file, maxWidth) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                const img = new Image();
+                img.onload = function () {
+                    const canvas = document.createElement("canvas");
+                    const scale = maxWidth / img.width;
+                    canvas.width = maxWidth;
+                    canvas.height = img.height * scale;
+                    const ctx = canvas.getContext("2d");
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    canvas.toBlob((blob) => {
+                        resolve(blob);
+                    }, "image/jpeg", 0.7); // 70% quality
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    // Image preview modal
+    document.querySelectorAll('.media-item img').forEach(img => {
+        img.addEventListener('click', function () {
+            const modalImage = document.getElementById('modalImage');
+            modalImage.src = this.dataset.src;
+        });
+    });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,78 @@
+/* General page layout */
+body {
+  background-color: #f8f9fa;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Page headings */
+h1, h2, h3 {
+  color: #343a40;
+  margin-bottom: 20px;
+}
+
+/* Form labels and inputs */
+label {
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+input[type="text"],
+input[type="datetime-local"],
+textarea,
+select {
+  border-radius: 6px;
+  border: 1px solid #ced4da;
+  padding: 8px;
+  width: 100%;
+}
+
+/* Buttons */
+button, .btn {
+  border-radius: 5px;
+  padding: 8px 16px;
+  font-weight: 500;
+}
+
+/* Table styling */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-top: 20px;
+}
+
+th, td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid #dee2e6;
+}
+
+th {
+  background-color: #e9ecef;
+  font-weight: bold;
+}
+
+/* Chart container */
+#chartContainer {
+  margin-top: 40px;
+}
+
+/* Alerts or error messages */
+.alert {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 6px;
+}
+
+/* Centered form wrapper */
+.centered-form {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* Footer (if needed) */
+footer {
+  margin-top: 50px;
+  text-align: center;
+  font-size: 0.9em;
+  color: #6c757d;
+}
