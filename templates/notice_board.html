@@ -1,0 +1,227 @@
+{% include 'header.html' %}
+
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>📋 Notice Board</h1>
+    <a href="{{ url_for('add_notice') }}" class="btn btn-primary">+ Add New Notice</a>
+  </div>
+
+  <!-- Tabs Navigation -->
+  <ul class="nav nav-tabs mb-4" id="noticeTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="unread-tab" data-bs-toggle="tab" data-bs-target="#unread" type="button" role="tab" aria-controls="unread" aria-selected="true">
+        Unread <span class="badge bg-primary" id="unread-count">{{ unread_notices|length }}</span>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="read-tab" data-bs-toggle="tab" data-bs-target="#read" type="button" role="tab" aria-controls="read" aria-selected="false">
+        Read <span class="badge bg-secondary" id="read-count">{{ read_notices|length }}</span>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="all-tab" data-bs-toggle="tab" data-bs-target="#all" type="button" role="tab" aria-controls="all" aria-selected="false">
+        All <span class="badge bg-info">{{ notices|length }}</span>
+      </button>
+    </li>
+  </ul>
+
+  <!-- Tab Content -->
+  <div class="tab-content" id="noticeTabContent">
+    <!-- Unread Tab -->
+    <div class="tab-pane fade show active" id="unread" role="tabpanel" aria-labelledby="unread-tab">
+      {% if unread_notices %}
+        {% for notice in unread_notices %}
+          {% include 'notice_card.html' %}
+        {% endfor %}
+      {% else %}
+        <div class="alert alert-info">
+          <h5>No unread notices</h5>
+          <p>You're all caught up! 🎉</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Read Tab -->
+    <div class="tab-pane fade" id="read" role="tabpanel" aria-labelledby="read-tab">
+      {% if read_notices %}
+        {% for notice in read_notices %}
+          {% include 'notice_card.html' %}
+        {% endfor %}
+      {% else %}
+        <div class="alert alert-info">
+          <h5>No read notices</h5>
+          <p>You haven't read any notices yet.</p>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- All Tab -->
+    <div class="tab-pane fade" id="all" role="tabpanel" aria-labelledby="all-tab">
+      {% if notices %}
+        {% for notice in notices %}
+          {% include 'notice_card.html' %}
+        {% endfor %}
+      {% else %}
+        <div class="alert alert-info">
+          <h5>No notices yet</h5>
+          <p>Be the first to add a notice!</p>
+          <a href="{{ url_for('add_notice') }}" class="btn btn-primary">Add Notice</a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+function markAsRead(noticeId) {
+  fetch(`/notice-board/${noticeId}/mark-read`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  }).then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        // Move notice from unread to read tab
+        const card = document.querySelector(`.notice-card[data-notice-id="${noticeId}"]`);
+        if (card) {
+          card.dataset.unread = 'false';
+          // Update button
+          const header = card.querySelector('.card-header');
+          const buttonContainer = header.querySelector('.mt-2');
+          if (buttonContainer) {
+            const deleteBtn = buttonContainer.querySelector('.btn-danger');
+            const deleteBtnHtml = deleteBtn ? deleteBtn.outerHTML : '';
+            buttonContainer.innerHTML = '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="markAsUnread(' + noticeId + ')">↻ Mark as Unread</button>' + deleteBtnHtml;
+          }
+          // Remove badge
+          const badge = document.getElementById(`badge-${noticeId}`);
+          if (badge) badge.remove();
+        }
+        // Update counts and move card if needed
+        updateTabCounts();
+        // If on unread tab, move card to read tab
+        if (document.getElementById('unread-tab').classList.contains('active')) {
+          moveCardBetweenTabs(noticeId, 'unread', 'read');
+        }
+        // Reload page to update notification count in header
+        setTimeout(() => location.reload(), 500);
+      }
+    })
+    .catch(error => {
+      console.error('Error marking notice as read:', error);
+      alert('Error marking notice as read');
+    });
+}
+
+function markAsUnread(noticeId) {
+  fetch(`/notice-board/${noticeId}/mark-unread`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  }).then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        // Move notice from read to unread tab
+        const card = document.querySelector(`.notice-card[data-notice-id="${noticeId}"]`);
+        if (card) {
+          card.dataset.unread = 'true';
+          // Update button
+          const header = card.querySelector('.card-header');
+          const buttonContainer = header.querySelector('.mt-2');
+          if (buttonContainer) {
+            const deleteBtn = buttonContainer.querySelector('.btn-danger');
+            const deleteBtnHtml = deleteBtn ? deleteBtn.outerHTML : '';
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-primary';
+            badge.id = `badge-${noticeId}`;
+            badge.textContent = 'New';
+            const titleDiv = header.querySelector('.d-flex:first-child');
+            if (titleDiv && !document.getElementById(`badge-${noticeId}`)) {
+              titleDiv.querySelector('.d-flex:last-child').appendChild(badge);
+            }
+            buttonContainer.innerHTML = '<button type="button" class="btn btn-sm btn-success" onclick="markAsRead(' + noticeId + ')">✓ Mark as Read</button>' + deleteBtnHtml;
+          }
+        }
+        // Update counts and move card if needed
+        updateTabCounts();
+        // If on read tab, move card to unread tab
+        if (document.getElementById('read-tab').classList.contains('active')) {
+          moveCardBetweenTabs(noticeId, 'read', 'unread');
+        }
+        // Reload page to update notification count in header
+        setTimeout(() => location.reload(), 500);
+      }
+    })
+    .catch(error => {
+      console.error('Error marking notice as unread:', error);
+      alert('Error marking notice as unread');
+    });
+}
+
+function deleteNotice(noticeId) {
+  if (!confirm('Are you sure you want to delete this notice? This will also delete all replies. This action cannot be undone.')) {
+    return;
+  }
+  
+  fetch(`/notice-board/${noticeId}/delete`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    }
+  }).then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        // Remove the notice card from the page
+        const card = document.querySelector(`.notice-card[data-notice-id="${noticeId}"]`);
+        if (card) {
+          card.style.transition = 'opacity 0.3s';
+          card.style.opacity = '0';
+          setTimeout(() => {
+            card.remove();
+            updateTabCounts();
+            // Reload page to update notification count
+            location.reload();
+          }, 300);
+        } else {
+          location.reload();
+        }
+      } else {
+        alert('Error deleting notice: ' + (data.error || 'Unknown error'));
+      }
+    })
+    .catch(error => {
+      console.error('Error deleting notice:', error);
+      alert('Error deleting notice');
+    });
+}
+
+function updateTabCounts() {
+  const unreadCount = document.querySelectorAll('#unread .notice-card').length;
+  const readCount = document.querySelectorAll('#read .notice-card').length;
+  const allCount = document.querySelectorAll('#all .notice-card').length;
+  
+  document.getElementById('unread-count').textContent = unreadCount;
+  document.getElementById('read-count').textContent = readCount;
+  document.querySelector('#all-tab .badge').textContent = allCount;
+}
+
+function moveCardBetweenTabs(noticeId, fromTab, toTab) {
+  const card = document.querySelector(`#${fromTab} .notice-card[data-notice-id="${noticeId}"]`);
+  if (card) {
+    const clonedCard = card.cloneNode(true);
+    card.remove();
+    const targetTab = document.getElementById(toTab);
+    if (targetTab.querySelector('.alert-info')) {
+      targetTab.innerHTML = '';
+    }
+    targetTab.appendChild(clonedCard);
+  }
+}
+
+// Update counts on page load
+document.addEventListener('DOMContentLoaded', function() {
+  updateTabCounts();
+});
+</script>

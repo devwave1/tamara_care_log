@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carer Profile - {{ user.full_name or user.username }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row mb-3">
+            <div class="col-md-8">
+                <h1>Carer Profile: {{ user.full_name or user.username }}</h1>
+            </div>
+            <div class="col-md-4">
+                <label for="carer_select_dropdown" class="form-label"><strong>Switch Carer:</strong></label>
+                <select class="form-select" id="carer_select_dropdown" onchange="switchCarer(this.value)">
+                    <option value="">-- Select Carer --</option>
+                    {% for u in all_users %}
+                    <option value="{{ u.id }}" {% if u.id == user.id %}selected{% endif %}>
+                        {{ u.username }}{% if u.full_name %} - {{ u.full_name }}{% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <a href="{{ url_for('admin') }}" class="btn btn-secondary">Back to Admin Panel</a>
+            <button type="submit" form="profileForm" class="btn btn-success btn-lg">
+                💾 Save Profile Changes
+            </button>
+        </div>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <form method="POST" id="profileForm">
+            <div class="row">
+                <!-- Left Column - Basic Info -->
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5>Basic Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="username" class="form-label">Username</label>
+                                <input type="text" class="form-control" id="username" value="{{ user.username }}" disabled>
+                                <small class="text-muted">Username cannot be changed</small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="email" value="{{ user.email }}" disabled>
+                                <small class="text-muted">Email cannot be changed</small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="full_name" class="form-label">Full Name</label>
+                                <input type="text" class="form-control" id="full_name" name="full_name" value="{{ user.full_name or '' }}" placeholder="e.g., John Smith">
+                            </div>
+                            <div class="mb-3">
+                                <label for="phone" class="form-label">Phone Number</label>
+                                <input type="text" class="form-control" id="phone" name="phone" value="{{ user.phone or '' }}" placeholder="e.g., +61 400 123 456">
+                            </div>
+                            <div class="mb-3">
+                                <label for="hire_date" class="form-label">Hire Date</label>
+                                <input type="date" class="form-control" id="hire_date" name="hire_date" value="{{ user.hire_date.strftime('%Y-%m-%d') if user.hire_date else '' }}">
+                            </div>
+                            <div class="mb-3">
+                                <label for="experience_years" class="form-label">Years of Experience</label>
+                                <input type="number" class="form-control" id="experience_years" name="experience_years" value="{{ user.experience_years or '' }}" min="0" placeholder="e.g., 5">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Right Column - Skills & Qualifications -->
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5>Education & Qualifications</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="education" class="form-label">Education</label>
+                                <textarea class="form-control" id="education" name="education" rows="3" placeholder="e.g., Bachelor of Nursing, Certificate III in Disability Support">{{ user.education or '' }}</textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label for="qualifications" class="form-label">Qualifications & Certifications</label>
+                                <textarea class="form-control" id="qualifications" name="qualifications" rows="3" placeholder="e.g., First Aid Certificate, Manual Handling, NDIS Worker Screening">{{ user.qualifications or '' }}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5>Skills & Strengths</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label for="skills" class="form-label">Skills</label>
+                                <textarea class="form-control" id="skills" name="skills" rows="3" placeholder="e.g., AAC device training, Behavior support, Personal care, Communication strategies">{{ user.skills or '' }}</textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label for="strengths" class="form-label">Strengths / What They're Good At</label>
+                                <textarea class="form-control" id="strengths" name="strengths" rows="3" placeholder="e.g., Excellent at building rapport, Patient and understanding, Strong communication skills">{{ user.strengths or '' }}</textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label for="specializations" class="form-label">Specializations</label>
+                                <textarea class="form-control" id="specializations" name="specializations" rows="2" placeholder="e.g., Autism support, AAC communication, Sensory processing">{{ user.specializations or '' }}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Bio and Notes -->
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5>Bio</h5>
+                        </div>
+                        <div class="card-body">
+                            <textarea class="form-control" id="bio" name="bio" rows="4" placeholder="General bio or background information about the carer">{{ user.bio or '' }}</textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5>Admin Notes</h5>
+                        </div>
+                        <div class="card-body">
+                            <textarea class="form-control" id="notes" name="notes" rows="4" placeholder="Internal notes (only visible to admins)">{{ user.notes or '' }}</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Statistics Card -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Activity Statistics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-4">
+                            <h4 class="text-primary">{{ total_logs }}</h4>
+                            <p class="text-muted">Total Log Entries</p>
+                        </div>
+                        <div class="col-md-4">
+                            <h4 class="text-success">{{ total_analyses }}</h4>
+                            <p class="text-muted">Analysis Entries</p>
+                        </div>
+                        <div class="col-md-4">
+                            <h4 class="text-info">{{ total_aac_entries }}</h4>
+                            <p class="text-muted">AAC Trial Entries</p>
+                        </div>
+                    </div>
+                    {% if activity_counts %}
+                    <hr>
+                    <h6>Top Activities:</h6>
+                    <ul class="list-unstyled">
+                        {% for activity, count in activity_counts[:5] %}
+                        <li>{{ activity }}: <strong>{{ count }}</strong> entries</li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted">No activity data available yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Analytics & Insights Section -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5>📊 Analytics & Insights</h5>
+                </div>
+                <div class="card-body">
+                    {% if analytics %}
+                    <!-- Quality Metrics -->
+                    {% if analytics.quality_metrics.avg_mood or analytics.quality_metrics.avg_communication or analytics.quality_metrics.avg_sleep %}
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6>Quality Metrics</h6>
+                        </div>
+                        {% if analytics.quality_metrics.avg_mood %}
+                        <div class="col-md-3">
+                            <div class="card border-{% if analytics.quality_metrics.avg_mood >= 4 %}success{% elif analytics.quality_metrics.avg_mood >= 3 %}warning{% else %}danger{% endif %}">
+                                <div class="card-body text-center">
+                                    <h5>{{ analytics.quality_metrics.avg_mood|round(1) }}</h5>
+                                    <small>Avg Mood (1-5)</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if analytics.quality_metrics.avg_communication %}
+                        <div class="col-md-3">
+                            <div class="card border-{% if analytics.quality_metrics.avg_communication >= 3 %}success{% else %}warning{% endif %}">
+                                <div class="card-body text-center">
+                                    <h5>{{ analytics.quality_metrics.avg_communication|round(1) }}</h5>
+                                    <small>Avg Communication (0-4)</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if analytics.quality_metrics.avg_sleep %}
+                        <div class="col-md-3">
+                            <div class="card border-{% if analytics.quality_metrics.avg_sleep >= 3 %}success{% else %}warning{% endif %}">
+                                <div class="card-body text-center">
+                                    <h5>{{ analytics.quality_metrics.avg_sleep|round(1) }}</h5>
+                                    <small>Avg Sleep (1-4)</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if analytics.quality_metrics.toilet_success_rate is not none %}
+                        <div class="col-md-3">
+                            <div class="card border-{% if analytics.quality_metrics.toilet_success_rate >= 60 %}success{% else %}warning{% endif %}">
+                                <div class="card-body text-center">
+                                    <h5>{{ analytics.quality_metrics.toilet_success_rate|round(0)|int }}%</h5>
+                                    <small>Toilet Success Rate</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Activity Frequency Analysis -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h6>✅ Most Logged Activities</h6>
+                            <ul class="list-group">
+                                {% for activity, count in analytics.activity_frequency.most_logged %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    {{ activity }}
+                                    <span class="badge bg-primary rounded-pill">{{ count }}</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>⚠️ Least Logged Activities</h6>
+                            {% if analytics.activity_frequency.least_logged %}
+                            <ul class="list-group">
+                                {% for activity, count in analytics.activity_frequency.least_logged %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    {{ activity }}
+                                    <span class="badge bg-warning rounded-pill">{{ count }}</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% else %}
+                            <p class="text-muted">All activities logged equally</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Trends Section -->
+                    {% if analytics.trends %}
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6>📈 Trends (Last 30 Days vs Previous)</h6>
+                        </div>
+                        {% if analytics.trends.mood_trend %}
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h5 class="text-{% if analytics.trends.mood_trend == 'improving' %}success{% elif analytics.trends.mood_trend == 'declining' %}danger{% else %}secondary{% endif %}">
+                                        {{ analytics.trends.mood_trend|title }}
+                                    </h5>
+                                    <small>Mood Trend</small>
+                                    {% if analytics.trends.mood_change %}
+                                    <p class="mb-0 mt-1"><small>{{ analytics.trends.mood_change|round(2) }}{% if analytics.trends.mood_change > 0 %}+{% endif %} change</small></p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if analytics.trends.comm_trend %}
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h5 class="text-{% if analytics.trends.comm_trend == 'improving' %}success{% elif analytics.trends.comm_trend == 'declining' %}danger{% else %}secondary{% endif %}">
+                                        {{ analytics.trends.comm_trend|title }}
+                                    </h5>
+                                    <small>Communication Trend</small>
+                                    {% if analytics.trends.comm_change %}
+                                    <p class="mb-0 mt-1"><small>{{ analytics.trends.comm_change|round(2) }}{% if analytics.trends.comm_change > 0 %}+{% endif %} change</small></p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if analytics.trends.toilet_trend %}
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h5 class="text-{% if analytics.trends.toilet_trend == 'improving' %}success{% elif analytics.trends.toilet_trend == 'declining' %}danger{% else %}secondary{% endif %}">
+                                        {{ analytics.trends.toilet_trend|title }}
+                                    </h5>
+                                    <small>Toilet Success Trend</small>
+                                    {% if analytics.trends.toilet_change %}
+                                    <p class="mb-0 mt-1"><small>{{ analytics.trends.toilet_change|round(0) }}{% if analytics.trends.toilet_change > 0 %}+{% endif %}% change</small></p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Consistency Metrics -->
+                    {% if analytics.consistency_metrics %}
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6>Consistency Metrics</h6>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h5 class="text-{% if analytics.consistency_metrics.days_since_last_log == 0 %}success{% elif analytics.consistency_metrics.days_since_last_log and analytics.consistency_metrics.days_since_last_log <= 3 %}warning{% else %}danger{% endif %}">
+                                        {{ analytics.consistency_metrics.days_since_last_log if analytics.consistency_metrics.days_since_last_log is not none else 'N/A' }}
+                                    </h5>
+                                    <small>Days Since Last Log</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h5>{{ analytics.consistency_metrics.entries_per_day|round(1) }}</h5>
+                                    <small>Entries Per Day</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h5>{{ analytics.consistency_metrics.total_days_logged }}</h5>
+                                    <small>Total Days Logged</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% if analytics.consistency_metrics.most_active_day %}
+                        <div class="col-md-3">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h5>{{ analytics.consistency_metrics.most_active_day[0] }}</h5>
+                                    <small>Most Active Day</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Gaps Analysis -->
+                    {% if analytics.gaps_analysis.missing_activities or analytics.gaps_analysis.activities_not_recent %}
+                    <div class="row mb-4">
+                        {% if analytics.gaps_analysis.activities_not_recent %}
+                        <div class="col-md-6">
+                            <h6>🔴 Activities Not Logged Recently</h6>
+                            <ul class="list-group">
+                                {% for activity, days_ago in analytics.gaps_analysis.activities_not_recent %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    {{ activity }}
+                                    <span class="badge bg-danger rounded-pill">{{ days_ago }} days ago</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                        {% if analytics.gaps_analysis.missing_activities %}
+                        <div class="col-md-6">
+                            <h6>📝 Never Logged Activities</h6>
+                            <ul class="list-group">
+                                {% for activity in analytics.gaps_analysis.missing_activities[:5] %}
+                                <li class="list-group-item">{{ activity }}</li>
+                                {% endfor %}
+                                {% if analytics.gaps_analysis.missing_activities|length > 5 %}
+                                <li class="list-group-item text-muted">... and {{ analytics.gaps_analysis.missing_activities|length - 5 }} more</li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Comparison with Other Carers -->
+                    {% if analytics.comparison and analytics.comparison.recent_missing %}
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6>⚠️ Activities Other Carers Logged (But {{ user.username }} Didn't)</h6>
+                            <p class="text-muted small mb-3">
+                                <strong>This shows what OTHER carers logged in the last 30 days that {{ user.username }} didn't log.</strong>
+                                <br>For example: If another carer logged "Menstrual Cycle" 2 weeks ago but {{ user.username }} didn't, it will appear here.
+                            </p>
+                        </div>
+                        <div class="col-12">
+                            {% for item in analytics.comparison.recent_missing %}
+                            <div class="card mb-3 {% if item.days_ago <= 14 %}border-warning{% endif %}">
+                                <div class="card-header bg-{% if item.days_ago <= 7 %}danger{% elif item.days_ago <= 14 %}warning{% else %}light{% endif %}">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h6 class="mb-0"><strong>{{ item.activity }}</strong></h6>
+                                            <small class="text-muted">
+                                                Last logged {{ item.last_logged_date.strftime('%d/%m/%Y') }} 
+                                                (<span class="badge bg-{% if item.days_ago <= 7 %}danger{% elif item.days_ago <= 14 %}warning{% else %}secondary{% endif %}">{{ item.days_ago }} days ago</span>)
+                                            </small>
+                                        </div>
+                                        <div>
+                                            <span class="badge bg-info me-1">{{ item.count }} total logs</span>
+                                            {% for carer in item.logged_by %}
+                                            <span class="badge bg-secondary me-1">{{ carer }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <h6 class="mb-2">Recent Log Entries from Other Carers:</h6>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-bordered mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>Date & Time</th>
+                                                    <th>Carer</th>
+                                                    <th>Value</th>
+                                                    <th>Value Type</th>
+                                                    <th>Notes</th>
+                                                    <th>Duration</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for log in item.detailed_logs %}
+                                                <tr>
+                                                    <td>{{ log.datetime.strftime('%d/%m/%Y %H:%M') }}</td>
+                                                    <td><span class="badge bg-info">{{ log.carer }}</span></td>
+                                                    <td>{{ log.value or '-' }}</td>
+                                                    <td>{{ log.value_type or '-' }}</td>
+                                                    <td>
+                                                        {% if log.notes %}
+                                                        <small>{{ log.notes }}{% if log.notes|length >= 100 %}...{% endif %}</small>
+                                                        {% else %}
+                                                        <span class="text-muted">-</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td>{{ log.duration or '-' }}</td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Insights & Recommendations -->
+                    {% if analytics.insights %}
+                    <div class="alert alert-info">
+                        <h6>💡 Insights & Recommendations</h6>
+                        <ul class="mb-0">
+                            {% for insight in analytics.insights %}
+                            <li>{{ insight }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                    
+                    {% else %}
+                    <p class="text-muted">No analytics data available yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Log Entries Section -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Log Entries</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Filters -->
+                    <form method="GET" action="{{ url_for('carer_profile', user_id=user.id) }}" class="mb-3">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label for="activity_filter" class="form-label">Filter by Activity:</label>
+                                <select class="form-select" id="activity_filter" name="activity">
+                                    <option value="">All Activities</option>
+                                    {% for activity in unique_activities %}
+                                    <option value="{{ activity }}" {% if selected_activity == activity %}selected{% endif %}>{{ activity }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="start_date_filter" class="form-label">From Date:</label>
+                                <input type="date" class="form-control" id="start_date_filter" name="start_date" value="{{ selected_start_date }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="end_date_filter" class="form-label">To Date:</label>
+                                <input type="date" class="form-control" id="end_date_filter" name="end_date" value="{{ selected_end_date }}">
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary w-100">Filter</button>
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-md-12">
+                                <a href="{{ url_for('carer_profile', user_id=user.id) }}" class="btn btn-sm btn-secondary">Clear Filters</a>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <!-- Log Entries Table -->
+                    {% if log_entries %}
+                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                        <table class="table table-sm table-hover table-striped">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>Date & Time</th>
+                                    <th>Activity</th>
+                                    <th>Value</th>
+                                    <th>Value Type</th>
+                                    <th>Notes</th>
+                                    <th>Duration</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in log_entries %}
+                                <tr>
+                                    <td>{{ log.activity_datetime.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td><strong>{{ log.activity_name }}</strong></td>
+                                    <td>{{ log.value }}</td>
+                                    <td>{{ log.value_type or '-' }}</td>
+                                    <td>
+                                        {% if log.notes %}
+                                            {% if log.notes|length > 50 %}
+                                                <span title="{{ log.notes }}">{{ log.notes[:50] }}...</span>
+                                            {% else %}
+                                                {{ log.notes }}
+                                            {% endif %}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ log.duration or '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="text-muted mt-2">
+                        <small>
+                            Showing {{ log_entries|length }} {% if log_entries|length == 100 %}most recent {% endif %}entries.
+                            {% if total_logs > log_entries|length %}
+                            <a href="{{ url_for('view_logs') }}?carer_name={{ user.username }}" target="_blank" class="ms-2">View all {{ total_logs }} logs for this carer</a>
+                            {% endif %}
+                        </small>
+                    </p>
+                    {% else %}
+                    <p class="text-muted">No log entries found{% if selected_activity or selected_start_date or selected_end_date %} for the selected filters{% endif %}.</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <button type="submit" class="btn btn-success btn-lg">
+                    💾 Save Profile Changes
+                </button>
+                <a href="{{ url_for('admin') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function switchCarer(userId) {
+            if (userId) {
+                window.location.href = "{{ url_for('carer_profile', user_id=0) }}".replace('0', userId);
+            }
+        }
+    </script>
+</body>
+</html>
+

@@ -33,6 +33,19 @@ class User(db.Model):
     password_hash = db.Column(db.String(128), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
     is_approved = db.Column(db.Boolean, default=False)
+    
+    # Profile fields
+    full_name = db.Column(db.String(200), nullable=True)
+    phone = db.Column(db.String(50), nullable=True)
+    education = db.Column(db.Text, nullable=True)  # Education background
+    qualifications = db.Column(db.Text, nullable=True)  # Certifications, licenses
+    skills = db.Column(db.Text, nullable=True)  # Skills and competencies
+    strengths = db.Column(db.Text, nullable=True)  # What they're good at
+    experience_years = db.Column(db.Integer, nullable=True)  # Years of experience
+    specializations = db.Column(db.Text, nullable=True)  # Special areas of expertise
+    bio = db.Column(db.Text, nullable=True)  # General bio/notes
+    hire_date = db.Column(db.Date, nullable=True)  # When they started
+    notes = db.Column(db.Text, nullable=True)  # Additional admin notes
 
 class AnalysisEntry(db.Model):
     __tablename__ = 'analysis_entries'
@@ -94,3 +107,35 @@ class AACTrialEntry(db.Model):
     # Audit
     recorded_by = db.Column(db.String(120), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class Notice(db.Model):
+    __tablename__ = 'notices'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_by = db.Column(db.String(100), nullable=False)  # username
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_important = db.Column(db.Boolean, default=False)  # For important notices that should be highlighted
+    replies = db.relationship('NoticeReply', backref='notice', lazy=True, cascade="all, delete-orphan", order_by='NoticeReply.created_at')
+    read_by = db.relationship('NoticeRead', backref='notice', lazy=True, cascade="all, delete-orphan")
+
+class NoticeReply(db.Model):
+    __tablename__ = 'notice_replies'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    notice_id = db.Column(db.Integer, db.ForeignKey('notices.id'), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_by = db.Column(db.String(100), nullable=False)  # username
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class NoticeRead(db.Model):
+    __tablename__ = 'notice_reads'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    notice_id = db.Column(db.Integer, db.ForeignKey('notices.id'), nullable=False)
+    user_id = db.Column(db.String(100), nullable=False)  # username
+    read_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Ensure a user can only have one read record per notice
+    __table_args__ = (db.UniqueConstraint('notice_id', 'user_id', name='_notice_user_read_uc'),)

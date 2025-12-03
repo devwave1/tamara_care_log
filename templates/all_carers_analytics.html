@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All Carers Analytics</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        .sortable-header {
+            cursor: pointer;
+            -webkit-user-select: none;
+            user-select: none;
+            position: relative;
+        }
+        .sortable-header:hover {
+            background-color: #f0f0f0;
+        }
+        .metric-card {
+            border-left: 4px solid #007bff;
+            transition: transform 0.2s;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .table-responsive {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .badge-metric {
+            font-size: 0.9rem;
+            padding: 0.4em 0.6em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>📊 All Carers Analytics</h1>
+            <a href="{{ url_for('admin') }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Admin
+            </a>
+        </div>
+        
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card metric-card">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ total_carers }}</h5>
+                        <p class="card-text text-muted mb-0">Total Carers</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card metric-card">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ total_entries_all }}</h5>
+                        <p class="card-text text-muted mb-0">Total Log Entries</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card metric-card">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ avg_entries_per_carer|round(1) }}</h5>
+                        <p class="card-text text-muted mb-0">Avg Entries/Carer</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card metric-card">
+                    <div class="card-body">
+                        <h5 class="card-title">{% if avg_mood_all %}{{ avg_mood_all|round(1) }}{% else %}N/A{% endif %}</h5>
+                        <p class="card-text text-muted mb-0">Avg Mood (All)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Filters -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-funnel"></i> Filters</h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" class="row g-3">
+                    <div class="col-md-4">
+                        <label for="date_filter" class="form-label">Date Range</label>
+                        <select id="date_filter" name="date_filter" class="form-select" aria-label="Date range filter" onchange="this.form.submit()">
+                            <option value="7" {% if date_filter == '7' %}selected{% endif %}>Last 7 Days</option>
+                            <option value="30" {% if date_filter == '30' %}selected{% endif %}>Last 30 Days</option>
+                            <option value="90" {% if date_filter == '90' %}selected{% endif %}>Last 90 Days</option>
+                            <option value="365" {% if date_filter == '365' %}selected{% endif %}>Last Year</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="min_entries" class="form-label">Minimum Entries</label>
+                        <input type="number" id="min_entries" name="min_entries" class="form-control" value="{{ min_entries }}" min="0" aria-label="Minimum entries filter" onchange="this.form.submit()">
+                        <small class="text-muted">Hide carers with fewer entries</small>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">&nbsp;</label>
+                        <div>
+                            <a href="{{ url_for('all_carers_analytics') }}" class="btn btn-outline-secondary w-100">
+                                <i class="bi bi-arrow-counterclockwise"></i> Reset Filters
+                            </a>
+                        </div>
+                    </div>
+                    <!-- Preserve sort parameters -->
+                    <input type="hidden" name="sort_by" value="{{ sort_by }}" aria-label="Sort by">
+                    <input type="hidden" name="sort_order" value="{{ sort_order }}" aria-label="Sort order">
+                </form>
+            </div>
+        </div>
+        
+        <!-- Comparison Table -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-table"></i> Carer Comparison</h5>
+            </div>
+            <div class="card-body">
+                {% if carer_analytics %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="sortable-header" onclick="sortTable('username')">
+                                    Carer Name
+                                    {% if sort_by == 'username' %}
+                                        <i class="bi bi-arrow-{% if sort_order == 'asc' %}up{% else %}down{% endif %}"></i>
+                                    {% endif %}
+                                </th>
+                                <th class="sortable-header" onclick="sortTable('total_entries')">
+                                    Total Entries
+                                    {% if sort_by == 'total_entries' %}
+                                        <i class="bi bi-arrow-{% if sort_order == 'asc' %}up{% else %}down{% endif %}"></i>
+                                    {% endif %}
+                                </th>
+                                <th class="sortable-header" onclick="sortTable('days_since_last_log')">
+                                    Days Since Last Log
+                                    {% if sort_by == 'days_since_last_log' %}
+                                        <i class="bi bi-arrow-{% if sort_order == 'asc' %}up{% else %}down{% endif %}"></i>
+                                    {% endif %}
+                                </th>
+                                <th class="sortable-header" onclick="sortTable('entries_per_day')">
+                                    Entries/Day
+                                    {% if sort_by == 'entries_per_day' %}
+                                        <i class="bi bi-arrow-{% if sort_order == 'asc' %}up{% else %}down{% endif %}"></i>
+                                    {% endif %}
+                                </th>
+                                <th class="sortable-header" onclick="sortTable('avg_mood')">
+                                    Avg Mood
+                                    {% if sort_by == 'avg_mood' %}
+                                        <i class="bi bi-arrow-{% if sort_order == 'asc' %}up{% else %}down{% endif %}"></i>
+                                    {% endif %}
+                                </th>
+                                <th>Avg Comm</th>
+                                <th>Avg Sleep</th>
+                                <th>Toilet Success</th>
+                                <th class="sortable-header" onclick="sortTable('activity_coverage')">
+                                    Activity Coverage
+                                    {% if sort_by == 'activity_coverage' %}
+                                        <i class="bi bi-arrow-{% if sort_order == 'asc' %}up{% else %}down{% endif %}"></i>
+                                    {% endif %}
+                                </th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for carer in carer_analytics %}
+                            <tr>
+                                <td>
+                                    <strong>{{ carer.full_name }}</strong><br>
+                                    <small class="text-muted">{{ carer.username }}</small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-primary badge-metric">{{ carer.total_entries }}</span>
+                                </td>
+                                <td>
+                                    {% if carer.days_since_last_log is not none %}
+                                        <span class="badge bg-{% if carer.days_since_last_log == 0 %}success{% elif carer.days_since_last_log <= 3 %}warning{% else %}danger{% endif %} badge-metric">
+                                            {{ carer.days_since_last_log }}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-info badge-metric">{{ carer.entries_per_day|round(1) }}</span>
+                                </td>
+                                <td>
+                                    {% if carer.avg_mood %}
+                                        <span class="badge bg-{% if carer.avg_mood >= 4 %}success{% elif carer.avg_mood >= 3 %}warning{% else %}danger{% endif %} badge-metric">
+                                            {{ carer.avg_mood|round(1) }}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if carer.avg_communication %}
+                                        <span class="badge bg-{% if carer.avg_communication >= 3 %}success{% else %}warning{% endif %} badge-metric">
+                                            {{ carer.avg_communication|round(1) }}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if carer.avg_sleep %}
+                                        <span class="badge bg-{% if carer.avg_sleep >= 3 %}success{% else %}warning{% endif %} badge-metric">
+                                            {{ carer.avg_sleep|round(1) }}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if carer.toilet_success_rate is not none %}
+                                        <span class="badge bg-{% if carer.toilet_success_rate >= 60 %}success{% else %}warning{% endif %} badge-metric">
+                                            {{ carer.toilet_success_rate|round(0)|int }}%
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary badge-metric">{{ carer.activity_coverage }}</span>
+                                    {% if carer.most_logged_activities %}
+                                        <br><small class="text-muted">
+                                            Top: {{ carer.most_logged_activities[0][0] if carer.most_logged_activities else 'N/A' }}
+                                        </small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('carer_profile', user_id=carer.user.id) }}" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-person-circle"></i> View Profile
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> No carers found matching the filter criteria. Try adjusting your filters.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function sortTable(column) {
+            const url = new URL(window.location);
+            const currentSort = url.searchParams.get('sort_by');
+            const currentOrder = url.searchParams.get('sort_order', 'desc');
+            
+            let newOrder = 'desc';
+            if (currentSort === column && currentOrder === 'desc') {
+                newOrder = 'asc';
+            }
+            
+            url.searchParams.set('sort_by', column);
+            url.searchParams.set('sort_order', newOrder);
+            
+            // Preserve filter parameters
+            const dateFilter = url.searchParams.get('date_filter') || '30';
+            const minEntries = url.searchParams.get('min_entries') || '0';
+            url.searchParams.set('date_filter', dateFilter);
+            url.searchParams.set('min_entries', minEntries);
+            
+            window.location = url;
+        }
+    </script>
+</body>
+</html>
+

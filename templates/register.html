@@ -2,35 +2,81 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Register</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Tamara Care Log</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .register-container {
+            max-width: 500px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f8f8f8;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .form-control {
+            padding: 10px;
+            font-size: 1.1rem;
+        }
+        .btn-primary {
+            padding: 10px;
+            font-size: 1.1rem;
+        }
+    </style>
 </head>
 <body>
-    <div class="container mt-5">
-        <h1>Register</h1>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-        <form method="POST" action="{{ url_for('register') }}">
-            <div class="mb-3">
-                <label class="form-label">Username</label>
-                <input type="text" class="form-control" name="username" required>
+    <div class="container register-container">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h3 class="card-title text-center mb-4">Register as Carer</h3>
+                
+                <div class="alert alert-info">
+                    <strong>📝 Registration Process:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>Fill out the form below with your details</li>
+                        <li>Your account will be created</li>
+                        <li>An admin will need to approve your account</li>
+                        <li>Once approved, you can log in and start logging care activities</li>
+                    </ul>
+                </div>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} text-center">{{ message }}</div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <form method="POST" action="{{ url_for('register') }}">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-lg" id="username" name="username" required 
+                               placeholder="Choose a username (e.g., your first name)">
+                        <small class="text-muted">This will be used to identify you in the system</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email Address <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control form-control-lg" id="email" name="email" required 
+                               placeholder="your.email@example.com">
+                        <small class="text-muted">We'll use this to contact you about your account</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control form-control-lg" id="password" name="password" required 
+                               placeholder="Choose a secure password" minlength="6">
+                        <small class="text-muted">Minimum 6 characters</small>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100 btn-lg">Register Account</button>
+                    <a href="{{ url_for('login') }}" class="btn btn-secondary w-100 mt-2">Back to Login</a>
+                </form>
             </div>
-            <div class="mb-3">
-                <label class="form-label">Email</label>
-                <input type="email" class="form-control" name="email" required>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Password</label>
-                <input type="password" class="form-control" name="password" required>
-            </div>
-            <button type="submit" class="btn btn-primary">Register</button>
-            <a href="{{ url_for('login') }}" class="btn btn-secondary">Back to Login</a>
-        </form>
+        </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>

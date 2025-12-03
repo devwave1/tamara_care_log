@@ -28,12 +28,60 @@
           {'label': 'Add Analysis', 'href': '/analysis', 'classes': 'nav-link'},
           {'label': 'Insights Dashboard', 'href': '/analysis-dashboard', 'classes': 'nav-link'},
           {'label': 'GAS & AAC Tracker', 'href': '/aac', 'classes': 'nav-link'},
+          {'label': 'Notice Board', 'href': '/notice-board', 'classes': 'nav-link'},
           {'label': 'Logout', 'href': '/logout', 'classes': 'nav-link btn btn-outline-danger text-white'}
         ] %}
-        <ul class="navbar-nav ms-auto">{%- for link in nav_links %}<li class="nav-item"><a class="{{ link.classes }}" href="{{ link.href }}">{{ link.label }}</a></li>{%- endfor %}{%- if session.get('carer_id') and User.query.filter_by(username=session['carer_id']).first().is_admin %}<li class="nav-item"><a class="nav-link btn btn-outline-warning text-white" href="/admin">Admin Panel</a></li>{%- endif %}</ul>
+        {% set unread_count = get_unread_notice_count() if session.get('carer_id') else 0 %}
+        <ul class="navbar-nav ms-auto">
+          {%- for link in nav_links %}
+            <li class="nav-item">
+              <a class="{{ link.classes }}" href="{{ link.href }}">
+                {{ link.label }}
+                {%- if link.href == '/notice-board' and unread_count > 0 %}
+                  <span class="badge bg-danger ms-1">{{ unread_count }}</span>
+                {%- endif %}
+              </a>
+            </li>
+          {%- endfor %}
+          {%- if session.get('carer_id') and User.query.filter_by(username=session['carer_id']).first().is_admin %}
+            <li class="nav-item"><a class="nav-link btn btn-outline-warning text-white" href="/admin">Admin Panel</a></li>
+          {%- endif %}
+        </ul>
+        {%- if unread_count > 0 %}
+          <!-- Desktop Notification Banner -->
+          <div class="alert alert-info alert-dismissible fade show d-none d-md-block m-2" role="alert" style="position: fixed; top: 70px; right: 20px; z-index: 1050; max-width: 400px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <strong>📋 New Notice Available!</strong> You have {{ unread_count }} unread notice{% if unread_count > 1 %}s{% endif %}.
+            <a href="{{ url_for('notice_board') }}" class="alert-link fw-bold">View Notice Board</a>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        {%- endif %}
       </div>
     </div>
   </nav>
+
+  <!-- Notice Board Modal Popup -->
+  {%- if unread_count > 0 %}
+    <div class="modal fade" id="noticeBoardModal" tabindex="-1" aria-labelledby="noticeBoardModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header bg-info text-white">
+            <h5 class="modal-title" id="noticeBoardModalLabel">
+              📋 New Notice{% if unread_count > 1 %}s{% endif %} Available!
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p class="lead">You have <strong>{{ unread_count }}</strong> unread notice{% if unread_count > 1 %}s{% endif %}.</p>
+            <p>Please check the Notice Board to view important updates and announcements.</p>
+            <div class="d-flex gap-2 justify-content-end">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              <a href="{{ url_for('notice_board') }}" class="btn btn-primary">View Notice Board</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  {%- endif %}
 
   {% block content %}{% endblock %}
 
@@ -50,6 +98,23 @@
           !toggler.contains(event.target)) {
         const collapseInstance = bootstrap.Collapse.getInstance(nav);
         collapseInstance.hide();
+      }
+    });
+
+    // Show notice board modal on page load if there are unread notices and user just logged in
+    document.addEventListener('DOMContentLoaded', function() {
+      const unreadCount = {{ unread_count if unread_count > 0 else 0 }};
+      const justLoggedIn = {{ 'true' if session.get('just_logged_in') else 'false' }};
+      
+      if (unreadCount > 0 && justLoggedIn) {
+        // Clear the session flag so modal doesn't show again on page refresh
+        fetch('/clear-login-flag', { method: 'POST' }).catch(() => {});
+        
+        const modalElement = document.getElementById('noticeBoardModal');
+        if (modalElement) {
+          const modal = new bootstrap.Modal(modalElement);
+          modal.show();
+        }
       }
     });
   </script>

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Insights Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
@@ -65,6 +66,59 @@
       color: #364a91;
       font-weight: 600;
     }
+    .vertical-text {
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+    }
+    .correlation-cell {
+      min-width: 80px;
+    }
+    /* Chart container - allow tooltips to overflow */
+    #toiletFluidChart {
+      position: relative;
+    }
+    .mb-4:has(#toiletFluidChart) {
+      overflow: visible !important;
+      position: relative;
+      z-index: 1;
+    }
+    /* Ensure parent containers don't clip tooltips */
+    .card, .card-body, body {
+      overflow-x: visible !important;
+    }
+    /* Custom tooltip styling for Chart.js - make it scrollable and readable */
+    .chartjs-tooltip {
+      max-height: 600px !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      max-width: 450px !important;
+      min-width: 380px !important;
+      border-radius: 8px !important;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3) !important;
+      background: rgba(0, 0, 0, 0.95) !important;
+      color: #fff !important;
+      padding: 12px !important;
+      position: absolute !important;
+      z-index: 9999 !important;
+      pointer-events: auto !important;
+    }
+    .chartjs-tooltip-body {
+      max-height: 550px !important;
+      overflow-y: auto !important;
+      padding: 4px 0 !important;
+    }
+    .chartjs-tooltip-body-item {
+      font-size: 11px !important;
+      line-height: 1.6 !important;
+      padding: 2px 0 !important;
+    }
+    .chartjs-tooltip-title {
+      font-size: 13px !important;
+      font-weight: bold !important;
+      margin-bottom: 8px !important;
+      padding-bottom: 6px !important;
+      border-bottom: 1px solid rgba(255,255,255,0.3) !important;
+    }
   </style>
 </head>
 <body>
@@ -98,10 +152,781 @@
         <p>Recent communication observations</p>
       </div>
       <div class="summary-card">
-        <h3>Work in progress</h3>
-        <p>Predictors & correlations coming soon</p>
+        <h3>{{ influence_data.target_days_count if influence_data else 0 }}</h3>
+        <p>Days analyzed for {{ target_metric|title }}</p>
       </div>
     </div>
+
+    <!-- Correlation & Influence Analysis Section -->
+    <div class="card mb-4">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-graph-up"></i> Correlation & Influence Analysis</h5>
+      </div>
+      <div class="card-body">
+        <form id="analysisForm" method="GET" class="row g-3 mb-4">
+          <div class="col-md-4">
+            <label for="target_metric" class="form-label">Select Metric to Analyze</label>
+            <select id="target_metric" name="target_metric" class="form-select" onchange="this.form.submit()">
+              <option value="mood" {% if target_metric == 'mood' %}selected{% endif %}>Mood</option>
+              <option value="sleep" {% if target_metric == 'sleep' %}selected{% endif %}>Sleep Quality</option>
+              <option value="communication" {% if target_metric == 'communication' %}selected{% endif %}>Communication</option>
+              <option value="motor" {% if target_metric == 'motor' %}selected{% endif %}>Motor Skills</option>
+              <option value="toilet_success" {% if target_metric == 'toilet_success' %}selected{% endif %}>Toilet Success Rate</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label for="threshold" class="form-label">Analyze When Metric Is</label>
+            <select id="threshold" name="threshold" class="form-select" onchange="this.form.submit()">
+              <option value="very_high" {% if threshold == 'very_high' %}selected{% endif %}>Very High</option>
+              <option value="high" {% if threshold == 'high' %}selected{% endif %}>High</option>
+              <option value="all" {% if threshold == 'all' %}selected{% endif %}>All</option>
+              <option value="low" {% if threshold == 'low' %}selected{% endif %}>Low</option>
+              <option value="very_low" {% if threshold == 'very_low' %}selected{% endif %}>Very Low</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label for="date_range" class="form-label">Quick Date Range</label>
+            <select id="date_range" name="date_range" class="form-select" onchange="updateDateInputs(); this.form.submit()">
+              <option value="custom" {% if date_range == 'custom' %}selected{% endif %}>Custom Range</option>
+              <option value="30" {% if date_range == '30' %}selected{% endif %}>Last 30 Days</option>
+              <option value="60" {% if date_range == '60' %}selected{% endif %}>Last 60 Days</option>
+              <option value="90" {% if date_range == '90' %}selected{% endif %}>Last 90 Days</option>
+              <option value="180" {% if date_range == '180' %}selected{% endif %}>Last 180 Days</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label for="start_date" class="form-label">Start Date</label>
+            <input type="date" id="start_date" name="start_date" class="form-control" value="{{ start_date if start_date else '' }}" onchange="updateDateRange(); document.getElementById('analysisForm').submit();">
+          </div>
+          <div class="col-md-4">
+            <label for="end_date" class="form-label">End Date</label>
+            <input type="date" id="end_date" name="end_date" class="form-control" value="{{ end_date if end_date else '' }}" onchange="updateDateRange(); document.getElementById('analysisForm').submit();">
+          </div>
+        </form>
+
+        {% if influence_data %}
+        {% set days_count = influence_data.target_days_count %}
+        {% set total_days = influence_data.total_days_with_data %}
+        {% set metric_entries = influence_data.metric_entries %}
+        
+        <!-- Threshold Label Mapping -->
+        {% set threshold_label = {
+            'very_high': 'Very High',
+            'high': 'High',
+            'all': 'All',
+            'low': 'Low',
+            'very_low': 'Very Low'
+        }[threshold] %}
+        
+        <!-- Data Statistics -->
+        <div class="alert alert-light border mb-3">
+          <h6 class="mb-2"><strong>📊 Data Overview:</strong></h6>
+          <div class="row">
+            <div class="col-md-4">
+              <p class="mb-1"><strong>Total {{ target_metric|title }} Entries:</strong> {{ metric_entries }}</p>
+            </div>
+            <div class="col-md-4">
+              <p class="mb-1"><strong>Days with {{ target_metric|title }} Data:</strong> {{ total_days }}</p>
+            </div>
+            <div class="col-md-4">
+              <p class="mb-1"><strong>Days Analyzed ({{ threshold_label }}):</strong> {{ days_count }}</p>
+            </div>
+          </div>
+          {% if influence_data.min_value is not none %}
+          <div class="row mt-2">
+            <div class="col-md-4">
+              <small class="text-muted">Daily Average Range: {{ influence_data.min_value }} - {{ influence_data.max_value }}</small>
+            </div>
+            <div class="col-md-4">
+              <small class="text-muted">Overall Daily Average: {{ influence_data.avg_value }}</small>
+            </div>
+            <div class="col-md-4">
+              {% if threshold != 'all' %}
+              <small class="text-muted">Threshold for "{{ threshold_label }}": {{ influence_data.threshold_value }}</small>
+              {% else %}
+              <small class="text-muted">Analyzing all days (no threshold)</small>
+              {% endif %}
+            </div>
+          </div>
+          {% endif %}
+          <p class="mb-0 mt-2"><small class="text-muted"><strong>Note:</strong> This analysis looks at <strong>daily averages</strong>, not individual entries. Even if you have many entries, we group them by day{% if threshold != 'all' %} and find days where the average is {{ threshold_label|lower }}{% endif %}.</small></p>
+        </div>
+        
+        {% if days_count < 5 %}
+        <div class="alert alert-warning border-warning">
+          <h6 class="alert-heading"><i class="bi bi-exclamation-triangle"></i> ⚠️ <strong>Not Enough Days for Reliable Analysis</strong></h6>
+          <p class="mb-2"><strong>Found only {{ days_count }} day{% if days_count != 1 %}s{% endif %} where the daily average of {{ target_metric|title }} was {{ threshold_label|lower }} (threshold: {{ influence_data.threshold_value }}).</strong></p>
+          <p class="mb-2">Even though you have {{ metric_entries }} individual entries, when we average them by day, only {{ days_count }} day{% if days_count != 1 %}s{% endif %} meet the "{{ threshold }}" threshold.</p>
+          <hr>
+          <p class="mb-2"><strong>💡 What This Means:</strong></p>
+          <p class="mb-2">The system groups all {{ target_metric|title }} entries by day and calculates a daily average. Only days where that average is {{ threshold_label|lower }}{% if influence_data.threshold_direction == 'high' %} (≥{{ influence_data.threshold_value }}){% elif influence_data.threshold_direction == 'low' %} (≤{{ influence_data.threshold_value }}){% endif %} are included. With only {{ days_count }} day{% if days_count != 1 %}s{% endif %}, we can't reliably identify patterns.</p>
+          <p class="mb-2"><strong>✅ Recommendations:</strong></p>
+          <ul class="mb-0">
+            <li><strong>Try a different threshold</strong> - "All" will analyze all days, or try "High"/"Low" for more days</li>
+            <li><strong>The threshold might be too strict</strong> - Currently set to {{ influence_data.threshold_value }}. Most days average around {{ influence_data.avg_value }}.</li>
+            <li><strong>Try a longer date range</strong> - More days might give more days that meet the threshold</li>
+            <li><strong>This might be normal</strong> - If {{ target_metric|title }} varies throughout the day, daily averages might cluster around the middle</li>
+          </ul>
+        </div>
+        {% elif days_count < 10 %}
+        <div class="alert alert-info border-info">
+          <h6 class="alert-heading"><i class="bi bi-info-circle"></i> <strong>Limited Data - Results May Vary</strong></h6>
+          <p class="mb-2">Found <strong>{{ days_count }} days</strong> where {{ target_metric|title }} was {{ threshold }} (threshold: {{ influence_data.threshold_value }}).</p>
+          <p class="mb-0">This is a small sample. For more reliable results, try a longer date range or check if more data is available.</p>
+        </div>
+        {% else %}
+        <div class="alert alert-success border-success">
+          <h6 class="alert-heading"><i class="bi bi-check-circle"></i> <strong>Good Data Quality</strong></h6>
+          <p class="mb-0">Analyzing <strong>{{ days_count }} days</strong> where {{ target_metric|title }} was {{ threshold }} (threshold: {{ influence_data.threshold_value }}). This is enough data for reliable analysis.</p>
+        </div>
+        {% endif %}
+
+        <!-- Plain Language Summary -->
+        {% if days_count >= 5 %}
+        <div class="card mb-4 border-primary">
+          <div class="card-header bg-primary text-white">
+            <h6 class="mb-0"><i class="bi bi-lightbulb"></i> What This Analysis Shows</h6>
+          </div>
+          <div class="card-body">
+            <p class="mb-3"><strong>You're looking at:</strong> What was happening on the {{ days_count }} days when {{ target_metric|title }} was {{ threshold_label|lower }}.</p>
+            
+            {% if influence_data.carer_frequency %}
+            <p class="mb-2"><strong>👤 Carers Present:</strong> 
+              {% set top_carer = influence_data.carer_frequency.items()|first %}
+              {% if top_carer %}
+              {{ top_carer[0] }} was present {{ top_carer[1] }}% of the time
+              {% endif %}
+            </p>
+            {% endif %}
+            
+            {% if influence_data.food_frequency %}
+            <p class="mb-2"><strong>🍽️ Food:</strong> 
+              {% set food_items = influence_data.food_frequency.items()|list %}
+              {% for food, pct in food_items[:3] %}
+              {{ food }} ({{ pct }}%){% if not loop.last %}, {% endif %}
+              {% endfor %}
+            </p>
+            {% endif %}
+            
+            {% if influence_data.activity_frequency %}
+            <p class="mb-2"><strong>🎯 Activities:</strong> 
+              {% set activity_items = influence_data.activity_frequency.items()|list %}
+              {% for activity, pct in activity_items[:3] %}
+              {{ activity }} ({{ pct }}%){% if not loop.last %}, {% endif %}
+              {% endfor %}
+            </p>
+            {% endif %}
+            
+            {% if influence_data.influences %}
+            <p class="mb-0"><strong>📊 Other Metrics on These Days:</strong></p>
+            <ul class="mb-0">
+              {% for metric, avg_value in influence_data.influences.items() %}
+              <li>{{ metric|replace('_', ' ')|title }}: {{ avg_value }}</li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+            
+            {% if days_count < 10 %}
+            <div class="alert alert-warning mt-3 mb-0">
+              <small><strong>Note:</strong> With only {{ days_count }} days, these patterns might not be reliable. Consider collecting more data or trying different filters.</small>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Explanation Section -->
+    <div class="alert alert-light border mb-4">
+      <h6 class="mb-2"><strong>📖 Understanding This Page:</strong></h6>
+      <p class="mb-2">This page has <strong>two separate analyses</strong>:</p>
+      <ol class="mb-2">
+        <li><strong>Influence Factors (below)</strong> - Shows what was present when {{ target_metric|title }} was {{ threshold_label|lower }}. This answers: "What was happening on those specific days?"</li>
+        <li><strong>Correlation Matrix (further below)</strong> - Shows how all metrics relate to each other over the entire {{ date_range }}-day period. This answers: "Do these metrics generally move together?"</li>
+      </ol>
+      <p class="mb-0"><small class="text-muted"><strong>Important:</strong> The Correlation Matrix analyzes ALL days, not just the days where {{ target_metric|title }} was {{ threshold_label|lower }}.</small></p>
+    </div>
+
+    <!-- Correlation Matrix -->
+    {% if correlation_matrix %}
+    <div class="card mb-4">
+      <div class="card-header bg-info text-white">
+        <h5 class="mb-2"><span>📊</span> Correlation Matrix - How Metrics Relate to Each Other</h5>
+        <p class="mb-0 small">This table shows how different metrics move together. Read across a row to see how that metric correlates with others.</p>
+      </div>
+      <div class="card-body">
+        <!-- Legend -->
+        <div class="alert alert-light mb-4">
+          <h6 class="mb-3"><strong>How to Read This Table:</strong></h6>
+          <div class="row">
+            <div class="col-md-6">
+              <p class="mb-2"><strong>Reading the Grid:</strong></p>
+              <ul class="mb-0 small">
+                <li><strong>Rows</strong> = The metric you're analyzing (e.g., "Mood")</li>
+                <li><strong>Columns</strong> = What you're comparing it to (e.g., "Sleep")</li>
+                <li><strong>Example:</strong> Find "Mood" row, look at "Sleep" column = shows how mood and sleep relate</li>
+              </ul>
+            </div>
+            <div class="col-md-6">
+              <p class="mb-2"><strong>Color Meanings:</strong></p>
+              <ul class="mb-0 small">
+                <li><span class="badge bg-success">Green</span> = Strong positive (≥0.7) - They move together</li>
+                <li><span class="badge bg-danger">Red</span> = Strong negative (≤-0.7) - They move opposite</li>
+                <li><span class="badge bg-info">Blue</span> = Moderate positive (0.4-0.7)</li>
+                <li><span class="badge bg-warning">Yellow</span> = Moderate negative (-0.4 to -0.7)</li>
+                <li><span class="text-muted">Gray text</span> = Weak correlation (<0.4)</li>
+                <li><span class="badge bg-secondary">Gray badge</span> = Same metric (always 1.0)</li>
+                <li><span class="text-muted">—</span> = Not enough data</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Top Correlations Summary -->
+        {% set top_correlations = [] %}
+        {% for metric1, correlations in correlation_matrix.items() %}
+          {% for metric2, corr_value in correlations.items() %}
+            {% if corr_value is not none and metric1 != metric2 and corr_value|abs >= 0.3 %}
+              {% set _ = top_correlations.append((metric1, metric2, corr_value)) %}
+            {% endif %}
+          {% endfor %}
+        {% endfor %}
+        {% if top_correlations %}
+        {% set top_correlations = top_correlations|sort(attribute=2, reverse=true) %}
+        <div class="alert alert-primary mb-4">
+          <h6 class="mb-2"><strong>🔍 Key Findings - Strongest Relationships:</strong></h6>
+          <div class="row">
+            {% for metric1, metric2, corr_value in top_correlations[:6] %}
+            <div class="col-md-6 mb-2">
+              <strong>{{ metric1|replace('_', ' ')|title }}</strong> ↔ <strong>{{ metric2|replace('_', ' ')|title }}</strong>
+              <span class="badge bg-{% if corr_value >= 0.7 %}success{% elif corr_value >= 0.4 %}info{% elif corr_value <= -0.7 %}danger{% else %}warning{% endif %}">
+                {{ "%.2f"|format(corr_value) }}
+              </span>
+              {% if corr_value > 0 %}
+                <small class="text-muted">(move together)</small>
+              {% else %}
+                <small class="text-muted">(move opposite)</small>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        <div class="table-responsive">
+          <table class="table table-bordered table-sm">
+            <thead class="table-light">
+              <tr>
+                <th class="fw-bold">Metric<br><small class="text-muted">(Analyze this)</small></th>
+                {% for metric in correlation_matrix.keys() %}
+                <th class="text-center vertical-text fw-bold">
+                  {{ metric|replace('_', ' ')|title }}<br><small class="text-muted">(Compare to)</small>
+                </th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for metric1, correlations in correlation_matrix.items() %}
+              <tr>
+                <th class="bg-light fw-bold">{{ metric1|replace('_', ' ')|title }}</th>
+                {% for metric2, corr_value in correlations.items() %}
+                <td class="text-center align-middle correlation-cell {% if metric1 == metric2 %}bg-light{% endif %}">
+                  {% if corr_value is not none %}
+                    {% set abs_corr = corr_value|abs %}
+                    {% if metric1 == metric2 %}
+                      <span class="badge bg-secondary" title="Same metric - always 1.0">1.0</span>
+                    {% elif abs_corr >= 0.7 %}
+                      <span class="badge bg-{% if corr_value > 0 %}success{% else %}danger{% endif %}" 
+                            title="Strong {% if corr_value > 0 %}positive{% else %}negative{% endif %} correlation ({{ "%.2f"|format(corr_value) }})">
+                        {{ "%.2f"|format(corr_value) }}
+                      </span>
+                    {% elif abs_corr >= 0.4 %}
+                      <span class="badge bg-{% if corr_value > 0 %}info{% else %}warning{% endif %}"
+                            title="Moderate {% if corr_value > 0 %}positive{% else %}negative{% endif %} correlation ({{ "%.2f"|format(corr_value) }})">
+                        {{ "%.2f"|format(corr_value) }}
+                      </span>
+                    {% else %}
+                      <span class="text-muted" title="Weak correlation ({{ "%.2f"|format(corr_value) }})">{{ "%.2f"|format(corr_value) }}</span>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-muted" title="Not enough data to calculate correlation">—</span>
+                  {% endif %}
+                </td>
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-3">
+          <small class="text-muted">
+            <strong>Tip:</strong> Look for green/red badges to find strong relationships. 
+            Green means metrics increase together; red means one increases when the other decreases.
+          </small>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Influence Factors -->
+    {% if influence_data %}
+    <div class="row mb-4">
+      <!-- Carer Influence -->
+      {% if influence_data.carer_frequency %}
+      <div class="col-md-6 mb-4">
+        <div class="card h-100">
+          <div class="card-header">
+            <h6 class="mb-0">👤 Carer Presence</h6>
+          </div>
+          <div class="card-body">
+            <ul class="list-group list-group-flush">
+              {% for carer, percentage in influence_data.carer_frequency.items() %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                {{ carer }}
+                <span class="badge bg-primary rounded-pill">{{ percentage }}%</span>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Food Influence -->
+      {% if influence_data.food_frequency %}
+      <div class="col-md-6 mb-4">
+        <div class="card h-100">
+          <div class="card-header">
+            <h6 class="mb-0">🍽️ Food Types</h6>
+          </div>
+          <div class="card-body">
+            <ul class="list-group list-group-flush">
+              {% for food, percentage in influence_data.food_frequency.items() %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                {{ food }}
+                <span class="badge bg-success rounded-pill">{{ percentage }}%</span>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Activity Influence -->
+      {% if influence_data.activity_frequency %}
+      <div class="col-md-6 mb-4">
+        <div class="card h-100">
+          <div class="card-header">
+            <h6 class="mb-0">🎯 Activities</h6>
+          </div>
+          <div class="card-body">
+            <ul class="list-group list-group-flush">
+              {% for activity, percentage in influence_data.activity_frequency.items() %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                {{ activity }}
+                <span class="badge bg-info rounded-pill">{{ percentage }}%</span>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Time Patterns -->
+      {% if influence_data.time_patterns %}
+      <div class="col-md-6 mb-4">
+        <div class="card h-100">
+          <div class="card-header">
+            <h6 class="mb-0">⏰ Time of Day</h6>
+          </div>
+          <div class="card-body">
+            <ul class="list-group list-group-flush">
+              {% for time_period, percentage in influence_data.time_patterns.items() %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                {{ time_period }}
+                <span class="badge bg-warning rounded-pill">{{ percentage }}%</span>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Day of Week Patterns -->
+      {% if influence_data.day_of_week_patterns %}
+      <div class="col-md-6 mb-4">
+        <div class="card h-100">
+          <div class="card-header">
+            <h6 class="mb-0">📅 Day of Week</h6>
+          </div>
+          <div class="card-body">
+            <ul class="list-group list-group-flush">
+              {% for day, percentage in influence_data.day_of_week_patterns.items() %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                {{ day }}
+                <span class="badge bg-secondary rounded-pill">{{ percentage }}%</span>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Other Metrics Influence -->
+      {% if influence_data.influences %}
+      <div class="col-md-6 mb-4">
+        <div class="card h-100">
+          <div class="card-header">
+            <h6 class="mb-0">📈 Other Metrics (Average)</h6>
+          </div>
+          <div class="card-body">
+            <ul class="list-group list-group-flush">
+              {% for metric, avg_value in influence_data.influences.items() %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                {{ metric|replace('_', ' ')|title }}
+                <span class="badge bg-primary">{{ avg_value }}</span>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Summary Section -->
+    {% if influence_data %}
+    {% set days_count = influence_data.target_days_count %}
+    {% if days_count < 5 %}
+    <div class="card mb-4 border-warning">
+      <div class="card-header bg-warning text-dark">
+        <h6 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Summary</h6>
+      </div>
+      <div class="card-body">
+        <p class="mb-2"><strong>Not enough data to show reliable patterns.</strong></p>
+        <p class="mb-0">The cards above show what was logged on those {{ days_count }} day{% if days_count != 1 %}s{% endif %}, but with so few days, we can't tell if these are real patterns or just random chance.</p>
+      </div>
+    </div>
+    {% else %}
+    <div class="card mb-4 border-success">
+      <div class="card-header bg-success text-white">
+        <h6 class="mb-0"><i class="bi bi-check-circle"></i> Summary - What We Found</h6>
+      </div>
+      <div class="card-body">
+        <p class="mb-2">On the {{ days_count }} days when <strong>{{ target_metric|title }} was {{ threshold_label|lower }}</strong>, here's what we noticed:</p>
+        {% if influence_data.carer_frequency %}
+        <p class="mb-1">• <strong>Carers:</strong> {% for carer, pct in influence_data.carer_frequency.items() %}{{ carer }} ({{ pct }}%){% if not loop.last %}, {% endif %}{% endfor %}</p>
+        {% endif %}
+        {% if influence_data.food_frequency %}
+        <p class="mb-1">• <strong>Food:</strong> {% set food_list = influence_data.food_frequency.items()|list %}{% for food, pct in food_list[:3] %}{{ food }} ({{ pct }}%){% if not loop.last %}, {% endif %}{% endfor %}</p>
+        {% endif %}
+        {% if influence_data.activity_frequency %}
+        <p class="mb-1">• <strong>Activities:</strong> {% set activity_list = influence_data.activity_frequency.items()|list %}{% for activity, pct in activity_list[:3] %}{{ activity }} ({{ pct }}%){% if not loop.last %}, {% endif %}{% endfor %}</p>
+        {% endif %}
+        {% if influence_data.time_patterns %}
+        <p class="mb-1">• <strong>Time of Day:</strong> {% for time_period, pct in influence_data.time_patterns.items() %}{{ time_period }} ({{ pct }}%){% if not loop.last %}, {% endif %}{% endfor %}</p>
+        {% endif %}
+        <p class="mb-0 mt-2"><small class="text-muted"><strong>Remember:</strong> These are patterns we noticed, but they might not be the cause. More data would help confirm these patterns.</small></p>
+      </div>
+    </div>
+    {% endif %}
+    {% endif %}
+    {% endif %}
+
+    <!-- Actionable Insights & Recommendations -->
+    {% if influence_data and days_count >= 5 %}
+    <div class="card mb-4 border-primary">
+      <div class="card-header bg-primary text-white">
+        <h6 class="mb-0"><i class="bi bi-lightbulb-fill"></i> 💡 What This Means & Recommendations</h6>
+      </div>
+      <div class="card-body">
+        {% if target_metric == 'toilet_success' %}
+          {% if threshold == 'very_high' or threshold == 'high' %}
+          <h6 class="text-success mb-3">✅ What's Working Well on High Success Days:</h6>
+          <ul class="mb-3">
+            {% if influence_data.carer_frequency %}
+            <li><strong>Carers:</strong> On high success days, {% set carer_items = influence_data.carer_frequency.items()|list %}{% for carer, pct in carer_items %}{% if loop.index <= 2 %}{{ carer }} ({{ pct }}%){% if loop.index == 1 and carer_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were most present. <em>Recommendation: Consider scheduling these carers more often for toilet routines.</em></li>
+            {% endif %}
+            {% if influence_data.food_frequency %}
+            <li><strong>Food:</strong> {% set food_items = influence_data.food_frequency.items()|list %}{% for food, pct in food_items %}{% if loop.index <= 2 %}{{ food }} ({{ pct }}%){% if loop.index == 1 and food_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were common. <em>Recommendation: These foods might help with success - consider including them in meals before toilet attempts.</em></li>
+            {% endif %}
+            {% if influence_data.time_patterns %}
+            <li><strong>Timing:</strong> Success was higher during {% set time_items = influence_data.time_patterns.items()|list %}{% for time, pct in time_items %}{% if loop.index == 1 %}{{ time }} ({{ pct }}%){% endif %}{% endfor %}. <em>Recommendation: Schedule regular toilet attempts during this time period.</em></li>
+            {% endif %}
+            {% if influence_data.influences and influence_data.influences.get('fluid_ml') %}
+            <li><strong>Fluid Intake:</strong> Average {{ influence_data.influences.fluid_ml }}ml on high success days. <em>Recommendation: Maintain this fluid intake level.</em></li>
+            {% endif %}
+          </ul>
+          {% elif threshold == 'very_low' or threshold == 'low' %}
+          <h6 class="text-danger mb-3">⚠️ Areas for Improvement on Low Success Days:</h6>
+          <ul class="mb-3">
+            {% if influence_data.carer_frequency %}
+            <li><strong>Carers:</strong> On low success days, {% set carer_items = influence_data.carer_frequency.items()|list %}{% for carer, pct in carer_items %}{% if loop.index <= 2 %}{{ carer }} ({{ pct }}%){% if loop.index == 1 and carer_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were present. <em>Recommendation: Consider additional training or support for these carers, or pair them with more experienced carers.</em></li>
+            {% endif %}
+            {% if influence_data.influences and influence_data.influences.get('accidents') %}
+            <li><strong>Accidents:</strong> Average {{ influence_data.influences.accidents }} accidents per day on low success days. <em>Recommendation: Focus on prevention strategies - increase frequency of toilet attempts, watch for signs, maintain consistent routine.</em></li>
+            {% endif %}
+            {% if influence_data.influences and influence_data.influences.get('fluid_ml') %}
+            <li><strong>Fluid Intake:</strong> Only {{ influence_data.influences.fluid_ml }}ml average. <em>Recommendation: Increasing fluids might help - aim for consistent fluid intake throughout the day.</em></li>
+            {% endif %}
+            {% if influence_data.time_patterns %}
+            <li><strong>Timing:</strong> Success was lower during {% set time_items = influence_data.time_patterns.items()|list %}{% for time, pct in time_items %}{% if loop.index == 1 %}{{ time }} ({{ pct }}%){% endif %}{% endfor %}. <em>Recommendation: Try different approaches or increase support during this time.</em></li>
+            {% endif %}
+          </ul>
+          {% endif %}
+        {% elif target_metric == 'communication' %}
+          {% if threshold == 'very_high' or threshold == 'high' %}
+          <h6 class="text-success mb-3">✅ What's Working Well on High Communication Days:</h6>
+          <ul class="mb-3">
+            {% if influence_data.carer_frequency %}
+            <li><strong>Carers:</strong> {% set carer_items = influence_data.carer_frequency.items()|list %}{% for carer, pct in carer_items %}{% if loop.index <= 2 %}{{ carer }} ({{ pct }}%){% if loop.index == 1 and carer_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were present on high communication days. <em>Recommendation: Their communication approach seems effective - consider having them model techniques for other carers.</em></li>
+            {% endif %}
+            {% if influence_data.activity_frequency %}
+            <li><strong>Activities:</strong> {% set activity_items = influence_data.activity_frequency.items()|list %}{% for activity, pct in activity_items %}{% if loop.index <= 2 %}{{ activity }} ({{ pct }}%){% if loop.index == 1 and activity_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were common. <em>Recommendation: These activities encourage communication - include them more frequently in daily routines.</em></li>
+            {% endif %}
+            {% if influence_data.influences and influence_data.influences.get('sleep_avg') %}
+            <li><strong>Sleep:</strong> Average sleep was {{ influence_data.influences.sleep_avg }} on high communication days. <em>Recommendation: Good sleep supports communication - maintain sleep quality.</em></li>
+            {% endif %}
+          </ul>
+          {% elif threshold == 'very_low' or threshold == 'low' %}
+          <h6 class="text-danger mb-3">⚠️ Areas for Improvement on Low Communication Days:</h6>
+          <ul class="mb-3">
+            {% if influence_data.influences and influence_data.influences.get('sleep_avg') %}
+            <li><strong>Sleep:</strong> Average sleep was {{ influence_data.influences.sleep_avg }} on low communication days. <em>Recommendation: Poor sleep might affect communication - prioritize sleep quality and consider communication attempts when well-rested.</em></li>
+            {% endif %}
+            {% if influence_data.time_patterns %}
+            <li><strong>Timing:</strong> Communication was lower during {% set time_items = influence_data.time_patterns.items()|list %}{% for time, pct in time_items %}{% if loop.index == 1 %}{{ time }} ({{ pct }}%){% endif %}{% endfor %}. <em>Recommendation: Try different activities, reduce distractions, or adjust expectations during this time.</em></li>
+            {% endif %}
+            {% if influence_data.carer_frequency %}
+            <li><strong>Carers:</strong> {% set carer_items = influence_data.carer_frequency.items()|list %}{% for carer, pct in carer_items %}{% if loop.index <= 2 %}{{ carer }} ({{ pct }}%){% if loop.index == 1 and carer_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were present. <em>Recommendation: Consider additional AAC training or try different communication strategies.</em></li>
+            {% endif %}
+          </ul>
+          {% endif %}
+        {% elif target_metric == 'motor' %}
+          {% if threshold == 'very_high' or threshold == 'high' %}
+          <h6 class="text-success mb-3">✅ What's Working Well on High Motor Skills Days:</h6>
+          <ul class="mb-3">
+            {% if influence_data.activity_frequency %}
+            <li><strong>Activities:</strong> {% set activity_items = influence_data.activity_frequency.items()|list %}{% for activity, pct in activity_items %}{% if loop.index <= 2 %}{{ activity }} ({{ pct }}%){% if loop.index == 1 and activity_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were common. <em>Recommendation: These activities support motor skill development - include them regularly in daily routines.</em></li>
+            {% endif %}
+            {% if influence_data.influences and influence_data.influences.get('mood_avg') %}
+            <li><strong>Mood:</strong> Average mood was {{ influence_data.influences.mood_avg }} on high motor skills days. <em>Recommendation: Good mood supports motor skill performance - maintain activities that boost mood.</em></li>
+            {% endif %}
+            {% if influence_data.influences and influence_data.influences.get('sleep_avg') %}
+            <li><strong>Sleep:</strong> Average sleep was {{ influence_data.influences.sleep_avg }} on high motor skills days. <em>Recommendation: Good sleep supports motor skills - maintain sleep quality.</em></li>
+            {% endif %}
+          </ul>
+          {% elif threshold == 'very_low' or threshold == 'low' %}
+          <h6 class="text-danger mb-3">⚠️ Areas for Improvement on Low Motor Skills Days:</h6>
+          <ul class="mb-3">
+            {% if influence_data.influences and influence_data.influences.get('mood_avg') %}
+            <li><strong>Mood:</strong> Average mood was {{ influence_data.influences.mood_avg }} on low motor skills days. <em>Recommendation: Low mood might affect motor skills - address mood issues and consider motor activities when mood is better.</em></li>
+            {% endif %}
+            {% if influence_data.influences and influence_data.influences.get('sleep_avg') %}
+            <li><strong>Sleep:</strong> Average sleep was {{ influence_data.influences.sleep_avg }} on low motor skills days. <em>Recommendation: Poor sleep affects motor skills - prioritize sleep quality.</em></li>
+            {% endif %}
+          </ul>
+          {% endif %}
+        {% elif target_metric == 'mood' %}
+          {% if threshold == 'very_high' or threshold == 'high' %}
+          <h6 class="text-success mb-3">✅ What's Working Well on High Mood Days:</h6>
+          <ul class="mb-3">
+            {% if influence_data.food_frequency %}
+            <li><strong>Food:</strong> {% set food_items = influence_data.food_frequency.items()|list %}{% for food, pct in food_items %}{% if loop.index <= 2 %}{{ food }} ({{ pct }}%){% if loop.index == 1 and food_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were common on high mood days. <em>Recommendation: These foods might positively affect mood - include them regularly in meals.</em></li>
+            {% endif %}
+            {% if influence_data.activity_frequency %}
+            <li><strong>Activities:</strong> {% set activity_items = influence_data.activity_frequency.items()|list %}{% for activity, pct in activity_items %}{% if loop.index <= 2 %}{{ activity }} ({{ pct }}%){% if loop.index == 1 and activity_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were frequent. <em>Recommendation: These activities seem to boost mood - schedule them regularly.</em></li>
+            {% endif %}
+            {% if influence_data.influences and influence_data.influences.get('sleep_avg') %}
+            <li><strong>Sleep:</strong> Average sleep was {{ influence_data.influences.sleep_avg }} on high mood days. <em>Recommendation: Good sleep supports mood - maintain sleep routines.</em></li>
+            {% endif %}
+          </ul>
+          {% elif threshold == 'very_low' or threshold == 'low' %}
+          <h6 class="text-danger mb-3">⚠️ Areas for Improvement on Low Mood Days:</h6>
+          <ul class="mb-3">
+            {% if influence_data.influences and influence_data.influences.get('sleep_avg') %}
+            <li><strong>Sleep:</strong> Average sleep was {{ influence_data.influences.sleep_avg }} on low mood days. <em>Recommendation: Poor sleep affects mood - prioritize sleep quality, consider earlier bedtimes or sleep support.</em></li>
+            {% endif %}
+            {% if influence_data.influences and influence_data.influences.get('accidents') %}
+            <li><strong>Accidents:</strong> {{ influence_data.influences.accidents }} accidents average on low mood days. <em>Recommendation: Accidents might be causing distress - focus on prevention and provide comfort/support when accidents occur.</em></li>
+            {% endif %}
+            {% if influence_data.activity_frequency %}
+            <li><strong>Activities:</strong> Review what activities were happening - some might be causing stress or discomfort.</li>
+            {% endif %}
+          </ul>
+          {% endif %}
+        {% elif target_metric == 'sleep' %}
+          {% if threshold == 'very_high' or threshold == 'high' %}
+          <h6 class="text-success mb-3">✅ What's Working Well on Good Sleep Days:</h6>
+          <ul class="mb-3">
+            {% if influence_data.time_patterns %}
+            <li><strong>Routine:</strong> Good sleep patterns observed. <em>Recommendation: Maintain consistent bedtime routines and sleep schedules.</em></li>
+            {% endif %}
+            {% if influence_data.activity_frequency %}
+            <li><strong>Activities:</strong> {% set activity_items = influence_data.activity_frequency.items()|list %}{% for activity, pct in activity_items %}{% if loop.index <= 2 %}{{ activity }} ({{ pct }}%){% if loop.index == 1 and activity_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were common. <em>Recommendation: These activities might help with sleep - include them in evening routines.</em></li>
+            {% endif %}
+            {% if influence_data.influences and influence_data.influences.get('mood_avg') %}
+            <li><strong>Mood:</strong> Average mood was {{ influence_data.influences.mood_avg }} on good sleep days. <em>Recommendation: Good mood supports sleep - maintain activities that boost mood during the day.</em></li>
+            {% endif %}
+          </ul>
+          {% elif threshold == 'very_low' or threshold == 'low' %}
+          <h6 class="text-danger mb-3">⚠️ Areas for Improvement on Poor Sleep Days:</h6>
+          <ul class="mb-3">
+            {% if influence_data.influences and influence_data.influences.get('mood_avg') %}
+            <li><strong>Mood:</strong> Average mood was {{ influence_data.influences.mood_avg }} on poor sleep days. <em>Recommendation: Low mood might affect sleep - address mood issues during the day, consider activities that improve mood.</em></li>
+            {% endif %}
+            {% if influence_data.food_frequency %}
+            <li><strong>Food Timing:</strong> Review food intake timing - certain foods or eating too close to bedtime might affect sleep quality.</li>
+            {% endif %}
+            {% if influence_data.activity_frequency %}
+            <li><strong>Activities:</strong> Some activities might be overstimulating - avoid high-energy activities close to bedtime.</li>
+            {% endif %}
+          </ul>
+          {% endif %}
+        {% endif %}
+        
+        <hr>
+        <p class="mb-0"><small class="text-muted"><strong>Important:</strong> These recommendations are based on patterns in your data. Always consult with healthcare professionals before making significant changes to care routines. Correlation does not always mean causation - these are observations, not guarantees.</small></p>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Actionable Insights & Recommendations -->
+    {% if influence_data and days_count >= 5 %}
+    <div class="card mb-4 border-primary">
+      <div class="card-header bg-primary text-white">
+        <h6 class="mb-0"><i class="bi bi-lightbulb-fill"></i> 💡 What This Means & Recommendations</h6>
+      </div>
+      <div class="card-body">
+        {% if target_metric == 'toilet_success' %}
+          {% if threshold == 'very_high' or threshold == 'high' %}
+          <h6 class="text-success">✅ What's Working Well:</h6>
+          <ul>
+            {% if influence_data.carer_frequency %}
+            <li><strong>Carers:</strong> On high success days, {% set carer_items = influence_data.carer_frequency.items()|list %}{% for carer, pct in carer_items %}{% if loop.index <= 2 %}{{ carer }} ({{ pct }}%){% if loop.index == 1 and carer_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were most present. Consider scheduling these carers more often.</li>
+            {% endif %}
+            {% if influence_data.food_frequency %}
+            <li><strong>Food:</strong> {% set food_items = influence_data.food_frequency.items()|list %}{% for food, pct in food_items %}{% if loop.index <= 2 %}{{ food }} ({{ pct }}%){% if loop.index == 1 and food_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were common. These foods might help with success.</li>
+            {% endif %}
+            {% if influence_data.time_patterns %}
+            <li><strong>Timing:</strong> Success was higher during {% set time_items = influence_data.time_patterns.items()|list %}{% for time, pct in time_items %}{% if loop.index == 1 %}{{ time }} ({{ pct }}%){% endif %}{% endfor %}. Try scheduling toilet attempts during this time.</li>
+            {% endif %}
+          </ul>
+          {% elif threshold == 'very_low' or threshold == 'low' %}
+          <h6 class="text-danger">⚠️ Areas for Improvement:</h6>
+          <ul>
+            {% if influence_data.carer_frequency %}
+            <li><strong>Carers:</strong> On low success days, {% set carer_items = influence_data.carer_frequency.items()|list %}{% for carer, pct in carer_items %}{% if loop.index <= 2 %}{{ carer }} ({{ pct }}%){% if loop.index == 1 and carer_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were present. Consider additional training or support.</li>
+            {% endif %}
+            {% if influence_data.influences and influence_data.influences.get('accidents') %}
+            <li><strong>Accidents:</strong> Average {{ influence_data.influences.accidents }} accidents per day on low success days. Focus on prevention strategies.</li>
+            {% endif %}
+            {% if influence_data.influences and influence_data.influences.get('fluid_ml') %}
+            <li><strong>Fluid Intake:</strong> Only {{ influence_data.influences.fluid_ml }}ml average. Increasing fluids might help.</li>
+            {% endif %}
+          </ul>
+          {% endif %}
+        {% elif target_metric == 'communication' %}
+          {% if threshold == 'very_high' or threshold == 'high' %}
+          <h6 class="text-success">✅ What's Working Well:</h6>
+          <ul>
+            {% if influence_data.carer_frequency %}
+            <li><strong>Carers:</strong> {% set carer_items = influence_data.carer_frequency.items()|list %}{% for carer, pct in carer_items %}{% if loop.index <= 2 %}{{ carer }} ({{ pct }}%){% if loop.index == 1 and carer_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were present on high communication days. Their approach seems effective.</li>
+            {% endif %}
+            {% if influence_data.activity_frequency %}
+            <li><strong>Activities:</strong> {% set activity_items = influence_data.activity_frequency.items()|list %}{% for activity, pct in activity_items %}{% if loop.index <= 2 %}{{ activity }} ({{ pct }}%){% if loop.index == 1 and activity_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were common. These activities encourage communication.</li>
+            {% endif %}
+          </ul>
+          {% elif threshold == 'very_low' or threshold == 'low' %}
+          <h6 class="text-danger">⚠️ Areas for Improvement:</h6>
+          <ul>
+            {% if influence_data.influences and influence_data.influences.get('sleep_avg') %}
+            <li><strong>Sleep:</strong> Average sleep was {{ influence_data.influences.sleep_avg }} on low communication days. Poor sleep might affect communication - focus on sleep quality.</li>
+            {% endif %}
+            {% if influence_data.time_patterns %}
+            <li><strong>Timing:</strong> Communication was lower during {% set time_items = influence_data.time_patterns.items()|list %}{% for time, pct in time_items %}{% if loop.index == 1 %}{{ time }} ({{ pct }}%){% endif %}{% endfor %}. Try different activities or approaches during this time.</li>
+            {% endif %}
+          </ul>
+          {% endif %}
+        {% elif target_metric == 'motor' %}
+          {% if threshold == 'very_high' or threshold == 'high' %}
+          <h6 class="text-success">✅ What's Working Well:</h6>
+          <ul>
+            {% if influence_data.activity_frequency %}
+            <li><strong>Activities:</strong> {% set activity_items = influence_data.activity_frequency.items()|list %}{% for activity, pct in activity_items %}{% if loop.index <= 2 %}{{ activity }} ({{ pct }}%){% if loop.index == 1 and activity_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were common. These activities support motor skill development.</li>
+            {% endif %}
+            {% if influence_data.influences and influence_data.influences.get('mood_avg') %}
+            <li><strong>Mood:</strong> Average mood was {{ influence_data.influences.mood_avg }} on high motor skills days. Good mood supports motor skills.</li>
+            {% endif %}
+          </ul>
+          {% elif threshold == 'very_low' or threshold == 'low' %}
+          <h6 class="text-danger">⚠️ Areas for Improvement:</h6>
+          <ul>
+            {% if influence_data.influences and influence_data.influences.get('mood_avg') %}
+            <li><strong>Mood:</strong> Average mood was {{ influence_data.influences.mood_avg }} on low motor skills days. Low mood might affect motor skills - address mood issues.</li>
+            {% endif %}
+            {% if influence_data.influences and influence_data.influences.get('sleep_avg') %}
+            <li><strong>Sleep:</strong> Average sleep was {{ influence_data.influences.sleep_avg }} on low motor skills days. Poor sleep affects motor skills - prioritize sleep quality.</li>
+            {% endif %}
+          </ul>
+          {% endif %}
+        {% elif target_metric == 'mood' %}
+          {% if threshold == 'very_high' or threshold == 'high' %}
+          <h6 class="text-success">✅ What's Working Well:</h6>
+          <ul>
+            {% if influence_data.food_frequency %}
+            <li><strong>Food:</strong> {% set food_items = influence_data.food_frequency.items()|list %}{% for food, pct in food_items %}{% if loop.index <= 2 %}{{ food }} ({{ pct }}%){% if loop.index == 1 and food_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were common on high mood days. These foods might positively affect mood.</li>
+            {% endif %}
+            {% if influence_data.activity_frequency %}
+            <li><strong>Activities:</strong> {% set activity_items = influence_data.activity_frequency.items()|list %}{% for activity, pct in activity_items %}{% if loop.index <= 2 %}{{ activity }} ({{ pct }}%){% if loop.index == 1 and activity_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were frequent. These activities seem to boost mood.</li>
+            {% endif %}
+          </ul>
+          {% elif threshold == 'very_low' or threshold == 'low' %}
+          <h6 class="text-danger">⚠️ Areas for Improvement:</h6>
+          <ul>
+            {% if influence_data.influences and influence_data.influences.get('sleep_avg') %}
+            <li><strong>Sleep:</strong> Average sleep was {{ influence_data.influences.sleep_avg }} on low mood days. Poor sleep affects mood - prioritize sleep quality.</li>
+            {% endif %}
+            {% if influence_data.influences and influence_data.influences.get('accidents') %}
+            <li><strong>Accidents:</strong> {{ influence_data.influences.accidents }} accidents average on low mood days. Accidents might be causing distress.</li>
+            {% endif %}
+          </ul>
+          {% endif %}
+        {% elif target_metric == 'sleep' %}
+          {% if threshold == 'very_high' or threshold == 'high' %}
+          <h6 class="text-success">✅ What's Working Well:</h6>
+          <ul>
+            {% if influence_data.time_patterns %}
+            <li><strong>Routine:</strong> Good sleep patterns observed. Maintain consistent bedtime routines.</li>
+            {% endif %}
+            {% if influence_data.activity_frequency %}
+            <li><strong>Activities:</strong> {% set activity_items = influence_data.activity_frequency.items()|list %}{% for activity, pct in activity_items %}{% if loop.index <= 2 %}{{ activity }} ({{ pct }}%){% if loop.index == 1 and activity_items|length > 1 %} and {% endif %}{% endif %}{% endfor %} were common. These might help with sleep.</li>
+            {% endif %}
+          </ul>
+          {% elif threshold == 'very_low' or threshold == 'low' %}
+          <h6 class="text-danger">⚠️ Areas for Improvement:</h6>
+          <ul>
+            {% if influence_data.influences and influence_data.influences.get('mood_avg') %}
+            <li><strong>Mood:</strong> Average mood was {{ influence_data.influences.mood_avg }} on poor sleep days. Low mood might affect sleep - address mood issues.</li>
+            {% endif %}
+            {% if influence_data.food_frequency %}
+            <li><strong>Food Timing:</strong> Review food intake timing - certain foods might affect sleep quality.</li>
+            {% endif %}
+          </ul>
+          {% endif %}
+        {% endif %}
+        
+        <hr>
+        <p class="mb-0"><small class="text-muted"><strong>Note:</strong> These recommendations are based on patterns in your data. Always consult with healthcare professionals before making significant changes to care routines.</small></p>
+      </div>
+    </div>
+    {% endif %}
 
     <h2 class="section-title"><span>1</span>Activity volume snapshot</h2>
     <div class="table-responsive">
@@ -176,8 +1001,117 @@
     </div>
 
     <h2 class="section-title"><span>4</span>Daily feature snapshot</h2>
+    
+    <!-- Date Range Picker for Snapshot -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <form method="GET" id="snapshotDateForm" class="row g-3 align-items-end">
+          <input type="hidden" name="target_metric" value="{{ target_metric }}">
+          <input type="hidden" name="threshold" value="{{ threshold }}">
+          <input type="hidden" name="date_range" value="{{ date_range }}">
+          {% if start_date %}<input type="hidden" name="start_date" value="{{ start_date }}">{% endif %}
+          {% if end_date %}<input type="hidden" name="end_date" value="{{ end_date }}">{% endif %}
+          
+          <div class="col-md-4">
+            <label for="snapshot_start_date" class="form-label">Snapshot Start Date:</label>
+            <input type="date" id="snapshot_start_date" name="snapshot_start_date" 
+                   class="form-control" value="{{ snapshot_start_date if snapshot_start_date else '' }}" 
+                   onchange="document.getElementById('snapshotDateForm').submit();">
+          </div>
+          <div class="col-md-4">
+            <label for="snapshot_end_date" class="form-label">Snapshot End Date:</label>
+            <input type="date" id="snapshot_end_date" name="snapshot_end_date" 
+                   class="form-control" value="{{ snapshot_end_date if snapshot_end_date else '' }}" 
+                   onchange="document.getElementById('snapshotDateForm').submit();">
+          </div>
+          <div class="col-md-4">
+            <button type="button" class="btn btn-outline-secondary" onclick="resetSnapshotDates()">Reset to 60 Days</button>
+          </div>
+        </form>
+        <small class="text-muted">Default: Last 60 days. Change dates above to view a custom range.</small>
+      </div>
+    </div>
+    
+    <!-- Graph Metric Selector -->
+    <div class="card mb-3">
+      <div class="card-body py-2">
+        <div class="row align-items-center">
+          <div class="col-md-3">
+            <label for="lineMetricSelect" class="form-label mb-0"><strong>Line Graph (1st):</strong></label>
+            <select id="lineMetricSelect" class="form-select form-select-sm" onchange="updateChart()">
+              <option value="toilet_success_rate" selected>Toilet Success Rate (%)</option>
+              <option value="mood_avg">Mood Average</option>
+              <option value="sleep_avg">Sleep Average</option>
+              <option value="communication_avg">Communication Average</option>
+              <option value="motor_avg">Motor Skills Average</option>
+              <option value="food_count">Food Entries</option>
+              <option value="fluid_ml">Fluid Intake (ml)</option>
+              <option value="accidents">Accidents</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label for="lineMetricSelect2" class="form-label mb-0"><strong>Line Graph (2nd):</strong></label>
+            <select id="lineMetricSelect2" class="form-select form-select-sm" onchange="updateChart()">
+              <option value="">None</option>
+              <option value="toilet_success_rate">Toilet Success Rate (%)</option>
+              <option value="mood_avg">Mood Average</option>
+              <option value="sleep_avg">Sleep Average</option>
+              <option value="communication_avg">Communication Average</option>
+              <option value="motor_avg">Motor Skills Average</option>
+              <option value="food_count">Food Entries</option>
+              <option value="fluid_ml">Fluid Intake (ml)</option>
+              <option value="accidents">Accidents</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label for="lineMetricSelect3" class="form-label mb-0"><strong>Line Graph (3rd):</strong></label>
+            <select id="lineMetricSelect3" class="form-select form-select-sm" onchange="updateChart()">
+              <option value="">None</option>
+              <option value="toilet_success_rate">Toilet Success Rate (%)</option>
+              <option value="mood_avg">Mood Average</option>
+              <option value="sleep_avg">Sleep Average</option>
+              <option value="communication_avg">Communication Average</option>
+              <option value="motor_avg">Motor Skills Average</option>
+              <option value="food_count">Food Entries</option>
+              <option value="fluid_ml">Fluid Intake (ml)</option>
+              <option value="accidents">Accidents</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label for="lineMetricSelect4" class="form-label mb-0"><strong>Line Graph (4th):</strong></label>
+            <select id="lineMetricSelect4" class="form-select form-select-sm" onchange="updateChart()">
+              <option value="">None</option>
+              <option value="toilet_success_rate">Toilet Success Rate (%)</option>
+              <option value="mood_avg">Mood Average</option>
+              <option value="sleep_avg">Sleep Average</option>
+              <option value="communication_avg">Communication Average</option>
+              <option value="motor_avg">Motor Skills Average</option>
+              <option value="food_count">Food Entries</option>
+              <option value="fluid_ml">Fluid Intake (ml)</option>
+              <option value="accidents">Accidents</option>
+            </select>
+          </div>
+        </div>
+        <div class="row mt-2">
+          <div class="col-12">
+            <small class="text-muted">Select up to 4 metrics as lines. Others will appear as bars.</small>
+          </div>
+        </div>
+      </div>
+    </div>
+    
     <div class="mb-4">
-      <canvas id="toiletFluidChart" height="120"></canvas>
+      <canvas id="toiletFluidChart" height="220"></canvas>
+    </div>
+
+    <!-- AI Analysis Section -->
+    <div id="graphAnalysis" class="card mb-4" style="display: none;">
+      <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="bi bi-lightbulb"></i> 📊 Data Insights & Analysis</h5>
+      </div>
+      <div class="card-body" id="analysisContent">
+        <p class="text-muted">Loading analysis...</p>
+      </div>
     </div>
 
     <div class="table-responsive">
@@ -189,8 +1123,9 @@
             <th scope="col">Mood Avg</th>
             <th scope="col">Sleep Avg</th>
             <th scope="col">Communication Avg</th>
-            <th scope="col">Posture Avg</th>
-            <th scope="col">Posture Label</th>
+            <th scope="col">Motor Skills Avg</th>
+            <th scope="col">Health/Medical</th>
+            <th scope="col">Food</th>
             <th scope="col">Toilet (succ / attempts)</th>
             <th scope="col">Accidents</th>
             <th scope="col">Fluid (ml)</th>
@@ -206,8 +1141,33 @@
               <td>{{ row.mood_avg if row.mood_avg is not none else '—' }}</td>
               <td>{{ row.sleep_avg if row.sleep_avg is not none else '—' }}</td>
               <td>{{ row.communication_avg if row.communication_avg is not none else '—' }}</td>
-              <td>{{ row.posture_avg if row.posture_avg is not none else '—' }}</td>
-              <td>{{ row.posture_label or '—' }}</td>
+              <td>{{ row.motor_avg if row.motor_avg is not none else '—' }}{% if row.motor_label %} ({{ row.motor_label }}){% endif %}</td>
+              <td>
+                {% if row.health_summary %}
+                  <span data-bs-toggle="tooltip" 
+                        data-bs-placement="top" 
+                        data-bs-html="true"
+                        data-health-tooltip="{{ row.health_tooltip|e }}"
+                        style="cursor: help; text-decoration: underline dotted;">
+                    {{ row.health_summary }}
+                  </span>
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>
+                {% if row.food_summary %}
+                  <span data-bs-toggle="tooltip" 
+                        data-bs-placement="top" 
+                        data-bs-html="true"
+                        data-food-tooltip="{{ row.food_tooltip|e }}"
+                        style="cursor: help; text-decoration: underline dotted;">
+                    {{ row.food_summary }}
+                  </span>
+                {% else %}
+                  —
+                {% endif %}
+              </td>
               <td>
                 {% if row.toilet_attempts %}
                   {{ row.toilet_success }} / {{ row.toilet_attempts }}{% if row.toilet_success_rate is not none %} ({{ (row.toilet_success_rate * 100)|round(0) }}%){% endif %}
@@ -241,12 +1201,227 @@
   </div>
 </body>
 <script>
-  (async function initToiletFluidChart() {
+  // Reset snapshot dates to default 60 days
+  function resetSnapshotDates() {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - 59); // 60 days total
+    
+    document.getElementById('snapshot_start_date').value = startDate.toISOString().split('T')[0];
+    document.getElementById('snapshot_end_date').value = endDate.toISOString().split('T')[0];
+    document.getElementById('snapshotDateForm').submit();
+  }
+
+  let chartInstance = null;
+
+  // Metric configuration for line graphs
+  const metricConfig = {
+    'toilet_success_rate': {
+      label: 'Toilet Success Rate (%)',
+      extract: (row) => row.toilet_success_rate !== null ? Math.round(row.toilet_success_rate * 100) : null,
+      yAxisID: 'yLine',
+      color: '#1f77b4',
+      max: 100,
+      suffix: '%'
+    },
+    'mood_avg': {
+      label: 'Mood Average',
+      extract: (row) => row.mood_avg !== null ? row.mood_avg : null,
+      yAxisID: 'yLine',
+      color: '#2ca02c',
+      max: 5,
+      suffix: ''
+    },
+    'sleep_avg': {
+      label: 'Sleep Average',
+      extract: (row) => row.sleep_avg !== null ? row.sleep_avg : null,
+      yAxisID: 'yLine',
+      color: '#9467bd',
+      max: 4,
+      suffix: ''
+    },
+    'communication_avg': {
+      label: 'Communication Average',
+      extract: (row) => row.communication_avg !== null ? row.communication_avg : null,
+      yAxisID: 'yLine',
+      color: '#8c564b',
+      max: 4,
+      suffix: ''
+    },
+    'motor_avg': {
+      label: 'Motor Skills Average',
+      extract: (row) => row.motor_avg !== null ? row.motor_avg : null,
+      yAxisID: 'yLine',
+      color: '#e377c2',
+      max: 3,
+      suffix: ''
+    },
+    'food_count': {
+      label: 'Food Entries',
+      extract: (row) => {
+        // Use food_count if available (from API)
+        if (row.food_count !== null && row.food_count !== undefined) {
+          return row.food_count;
+        }
+        // Fallback: count food_types array
+        if (row.food_types && Array.isArray(row.food_types)) {
+          return row.food_types.length;
+        }
+        // Fallback: parse from food_summary (format: "2: Protein, Vegetables")
+        if (row.food_summary) {
+          const match = String(row.food_summary).match(/^(\d+):/);
+          if (match) {
+            return parseInt(match[1]);
+          }
+        }
+        return null;
+      },
+      yAxisID: 'yLine',
+      color: '#bcbd22',
+      max: null, // Auto-scale based on data (no fixed max)
+      suffix: ' entries'
+    },
+    'fluid_ml': {
+      label: 'Fluid Intake (ml)',
+      extract: (row) => row.fluid_ml !== null && row.fluid_ml !== undefined ? row.fluid_ml : null,
+      yAxisID: 'yLine',
+      color: '#ff7f0e',
+      max: 2000, // Reasonable max for fluid intake per day
+      suffix: ' ml'
+    },
+    'accidents': {
+      label: 'Accidents',
+      extract: (row) => row.accidents !== null && row.accidents !== undefined ? row.accidents : null,
+      yAxisID: 'yLine',
+      color: '#d62728',
+      max: 10, // Reasonable max for accidents per day
+      suffix: ''
+    }
+  };
+
+  // Bar metrics (all metrics except the selected line metric)
+  // Averages are normalized to percentages (0-100) for visibility
+  const barMetrics = [
+    { 
+      key: 'toilet_success_rate', 
+      label: 'Toilet Success Rate (%)', 
+      extract: (row) => row.toilet_success_rate !== null ? Math.round(row.toilet_success_rate * 100) : null, 
+      color: 'rgba(31, 119, 180, 0.6)',
+      normalize: true,
+      max: 100,
+      suffix: '% (orig: {value})'
+    },
+    { 
+      key: 'food_count', 
+      label: 'Food Entries', 
+      extract: (row) => {
+        // Use food_count if available (from API)
+        if (row.food_count !== null && row.food_count !== undefined) {
+          return row.food_count;
+        }
+        // Fallback: count food_types array
+        if (row.food_types && Array.isArray(row.food_types)) {
+          return row.food_types.length;
+        }
+        // Fallback: parse from food_summary (format: "2: Protein, Vegetables")
+        if (row.food_summary) {
+          const match = String(row.food_summary).match(/^(\d+):/);
+          if (match) {
+            return parseInt(match[1]);
+          }
+        }
+        return null;
+      }, 
+      color: 'rgba(140, 86, 75, 0.6)',
+      normalize: false, // Don't normalize food count - show actual count
+    },
+    { 
+      key: 'fluid_ml', 
+      label: 'Fluid Intake (ml)', 
+      extract: (row) => row.fluid_ml || 0, 
+      color: 'rgba(255, 159, 64, 0.6)',
+      normalize: false,
+      max: null,
+      suffix: ' ml'
+    },
+    { 
+      key: 'accidents', 
+      label: 'Accidents', 
+      extract: (row) => row.accidents || 0, 
+      color: 'rgba(255, 99, 132, 0.6)',
+      normalize: false,
+      max: null,
+      suffix: ''
+    },
+    { 
+      key: 'mood_avg', 
+      label: 'Mood Avg (%)', 
+      extract: (row) => row.mood_avg !== null ? row.mood_avg : null, 
+      color: 'rgba(46, 160, 44, 0.6)',
+      normalize: true,
+      max: 5,
+      suffix: '% (orig: {value})'
+    },
+    { 
+      key: 'sleep_avg', 
+      label: 'Sleep Avg (%)', 
+      extract: (row) => row.sleep_avg !== null ? row.sleep_avg : null, 
+      color: 'rgba(148, 103, 189, 0.6)',
+      normalize: true,
+      max: 4,
+      suffix: '% (orig: {value})'
+    },
+    { 
+      key: 'communication_avg', 
+      label: 'Comm Avg (%)', 
+      extract: (row) => row.communication_avg !== null ? row.communication_avg : null, 
+      color: 'rgba(140, 86, 75, 0.6)',
+      normalize: true,
+      max: 4,
+      suffix: '% (orig: {value})'
+    },
+    { 
+      key: 'motor_avg', 
+      label: 'Motor Avg (%)', 
+      extract: (row) => row.motor_avg !== null ? row.motor_avg : null, 
+      color: 'rgba(227, 119, 194, 0.6)',
+      normalize: true,
+      max: 3,
+      suffix: '% (orig: {value})'
+    },
+  ];
+
+  async function updateChart() {
     const canvas = document.getElementById('toiletFluidChart');
     if (!canvas) return;
 
+    // Destroy existing chart if it exists
+    if (chartInstance) {
+      chartInstance.destroy();
+      chartInstance = null;
+    }
+
     try {
-      const resp = await fetch('/analysis/data');
+      // Get snapshot dates from the form
+      const snapshotStart = document.getElementById('snapshot_start_date')?.value || '';
+      const snapshotEnd = document.getElementById('snapshot_end_date')?.value || '';
+      
+      // Get selected line metrics (can have up to 4)
+      const lineMetricKey = document.getElementById('lineMetricSelect')?.value || 'toilet_success_rate';
+      const lineMetricKey2 = document.getElementById('lineMetricSelect2')?.value || '';
+      const lineMetricKey3 = document.getElementById('lineMetricSelect3')?.value || '';
+      const lineMetricKey4 = document.getElementById('lineMetricSelect4')?.value || '';
+      const lineMetric = metricConfig[lineMetricKey];
+      const lineMetric2 = lineMetricKey2 ? metricConfig[lineMetricKey2] : null;
+      const lineMetric3 = lineMetricKey3 ? metricConfig[lineMetricKey3] : null;
+      const lineMetric4 = lineMetricKey4 ? metricConfig[lineMetricKey4] : null;
+      
+      let url = '/analysis/data';
+      if (snapshotStart && snapshotEnd) {
+        url += `?snapshot_start=${snapshotStart}&snapshot_end=${snapshotEnd}`;
+      }
+      
+      const resp = await fetch(url);
       if (!resp.ok) {
         console.warn('Unable to load analysis data:', resp.status);
         return;
@@ -259,36 +1434,114 @@
       }
 
       const labels = features.map(row => row.date);
-      const successRates = features.map(row =>
-        row.toilet_success_rate !== null ? Math.round(row.toilet_success_rate * 100) : null
-      );
-      const fluidTotals = features.map(row => row.fluid_ml || 0);
+      
+      // Extract line data for all selected metrics
+      const lineData = features.map(row => lineMetric.extract(row));
+      const lineData2 = lineMetric2 ? features.map(row => lineMetric2.extract(row)) : null;
+      const lineData3 = lineMetric3 ? features.map(row => lineMetric3.extract(row)) : null;
+      const lineData4 = lineMetric4 ? features.map(row => lineMetric4.extract(row)) : null;
+      
+      // Extract bar data (exclude the selected line metrics)
+      // Store original values for tooltips
+      // Normalize each metric relative to its own maximum (for visual comparison)
+      const barDatasets = barMetrics
+        .filter(metric => metric.key !== lineMetricKey && metric.key !== lineMetricKey2 && metric.key !== lineMetricKey3 && metric.key !== lineMetricKey4) // Don't show line metrics as bars
+        .map(metric => {
+          const originalValues = features.map(row => metric.extract(row));
+          
+          // Find the maximum value for this metric (for relative normalization)
+          const validValues = originalValues.filter(v => v !== null && v !== undefined);
+          const maxValue = validValues.length > 0 ? Math.max(...validValues) : 1;
+          
+          // Normalize all values relative to the maximum (max value = 100%)
+          const normalizedValues = originalValues.map(val => {
+            if (val === null || val === undefined) return null;
+            if (maxValue > 0) {
+              // Convert to percentage relative to max: (value / max) * 100
+              return (val / maxValue) * 100;
+            }
+            return 0;
+          });
+          
+          return {
+            type: 'bar',
+            label: metric.label,
+            data: normalizedValues,
+            originalData: originalValues, // Store for tooltip
+            maxValue: maxValue, // Store max for tooltip display
+            yAxisID: 'yBar',
+            backgroundColor: metric.color,
+            borderColor: metric.color.replace('0.6', '1'),
+            borderWidth: 1,
+            metricConfig: metric // Store config for tooltip formatting
+          };
+        });
+
+      // Ensure canvas container allows overflow for tooltips
+      const canvasContainer = canvas.parentElement;
+      if (canvasContainer) {
+        canvasContainer.style.overflow = 'visible';
+        canvasContainer.style.position = 'relative';
+        canvasContainer.style.zIndex = '1';
+      }
 
       const ctx = canvas.getContext('2d');
-      new Chart(ctx, {
+      chartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
           labels,
           datasets: [
             {
               type: 'line',
-              label: 'Toilet Success Rate (%)',
-              data: successRates,
-              yAxisID: 'ySuccess',
-              borderColor: '#1f77b4',
-              backgroundColor: '#1f77b4',
+              label: lineMetric.label,
+              data: lineData,
+              yAxisID: 'yLine',
+              borderColor: lineMetric.color,
+              backgroundColor: lineMetric.color,
               tension: 0.3,
               spanGaps: true,
+              borderWidth: 2,
             },
-            {
-              type: 'bar',
-              label: 'Fluid Intake (ml)',
-              data: fluidTotals,
-              yAxisID: 'yFluid',
-              backgroundColor: 'rgba(255, 159, 64, 0.5)',
-              borderColor: 'rgb(255, 159, 64)',
-              borderWidth: 1,
-            },
+            // Add second line if selected
+            ...(lineMetric2 && lineData2 ? [{
+              type: 'line',
+              label: lineMetric2.label,
+              data: lineData2,
+              yAxisID: 'yLine2',
+              borderColor: lineMetric2.color,
+              backgroundColor: lineMetric2.color,
+              tension: 0.3,
+              spanGaps: true,
+              borderWidth: 2,
+              borderDash: [5, 5], // Dashed line to distinguish from first line
+            }] : []),
+            // Add third line if selected
+            ...(lineMetric3 && lineData3 ? [{
+              type: 'line',
+              label: lineMetric3.label,
+              data: lineData3,
+              yAxisID: 'yLine3',
+              borderColor: lineMetric3.color,
+              backgroundColor: lineMetric3.color,
+              tension: 0.3,
+              spanGaps: true,
+              borderWidth: 2,
+              borderDash: [10, 5], // Different dash pattern
+            }] : []),
+            // Add fourth line if selected
+            ...(lineMetric4 && lineData4 ? [{
+              type: 'line',
+              label: lineMetric4.label,
+              data: lineData4,
+              yAxisID: 'yLine4',
+              borderColor: lineMetric4.color,
+              backgroundColor: lineMetric4.color,
+              tension: 0.3,
+              spanGaps: true,
+              borderWidth: 2,
+              borderDash: [2, 2], // Different dash pattern
+            }] : []),
+            ...barDatasets
           ],
         },
         options: {
@@ -298,45 +1551,825 @@
             mode: 'index',
             intersect: false,
           },
+          // Ensure all datasets are shown in tooltip
+          onHover: function(event, activeElements) {
+            // Show all datasets when hovering
+          },
           stacked: false,
           scales: {
             x: {
               ticks: { maxRotation: 0, minRotation: 0 },
             },
-            ySuccess: {
+            yLine: {
               type: 'linear',
               position: 'left',
               beginAtZero: true,
-              max: 100,
-              title: { display: true, text: 'Success Rate (%)' },
+              max: lineMetric.max || undefined, // Only set max if defined, otherwise auto-scale
+              title: { display: true, text: lineMetric.label },
+              grid: { drawOnChartArea: true },
             },
-            yFluid: {
+            ...(lineMetric2 ? {
+              yLine2: {
+                type: 'linear',
+                position: 'left',
+                beginAtZero: true,
+                max: lineMetric2.max || undefined, // Only set max if defined, otherwise auto-scale
+                title: { display: true, text: lineMetric2.label + ' (2nd)' },
+                grid: { drawOnChartArea: false },
+              }
+            } : {}),
+            ...(lineMetric3 ? {
+              yLine3: {
+                type: 'linear',
+                position: 'left',
+                beginAtZero: true,
+                max: lineMetric3.max || undefined, // Only set max if defined, otherwise auto-scale
+                title: { display: true, text: lineMetric3.label + ' (3rd)' },
+                grid: { drawOnChartArea: false },
+              }
+            } : {}),
+            ...(lineMetric4 ? {
+              yLine4: {
+                type: 'linear',
+                position: 'left',
+                beginAtZero: true,
+                max: lineMetric4.max || undefined, // Only set max if defined, otherwise auto-scale
+                title: { display: true, text: lineMetric4.label + ' (4th)' },
+                grid: { drawOnChartArea: false },
+              }
+            } : {}),
+            yBar: {
               type: 'linear',
               position: 'right',
               beginAtZero: true,
-              title: { display: true, text: 'Fluid Intake (ml)' },
+              max: 100, // All bars are normalized to 0-100% relative to their own max
+              title: { display: true, text: 'Other Metrics (Relative %)' },
               grid: { drawOnChartArea: false },
+              ticks: {
+                callback: function(value) {
+                  return Math.round(value) + '%';
+                }
+              }
             },
           },
           plugins: {
             tooltip: {
               callbacks: {
-                label(ctx) {
-                  const label = ctx.dataset.label || '';
-                  if (ctx.dataset.yAxisID === 'ySuccess') {
-                    return `${label}: ${ctx.parsed.y ?? '—'}%`;
+                label: function(context) {
+                  let label = context.dataset.label || '';
+                  if (label) {
+                    label += ': ';
                   }
-                  return `${label}: ${ctx.parsed.y ?? 0} ml`;
+                  if (context.parsed.y !== null) {
+                    if (context.dataset.yAxisID === 'yLine' || context.dataset.yAxisID === 'yLine2' || context.dataset.yAxisID === 'yLine3' || context.dataset.yAxisID === 'yLine4') {
+                      // Line metric - show original value
+                      let currentLineMetric = lineMetric;
+                      if (context.dataset.yAxisID === 'yLine2') currentLineMetric = lineMetric2;
+                      else if (context.dataset.yAxisID === 'yLine3') currentLineMetric = lineMetric3;
+                      else if (context.dataset.yAxisID === 'yLine4') currentLineMetric = lineMetric4;
+                      label += context.parsed.y.toFixed(1);
+                      if (currentLineMetric && currentLineMetric.suffix) {
+                        label += currentLineMetric.suffix;
+                      }
+                    } else if (context.dataset.yAxisID === 'yBar') {
+                      // Bar metric - show relative percentage and original value
+                      const metricConfig = context.dataset.metricConfig;
+                      const originalValue = context.dataset.originalData[context.dataIndex];
+                      const maxValue = context.dataset.maxValue;
+                      
+                      if (originalValue !== null && originalValue !== undefined) {
+                        // Show relative percentage (for visual comparison)
+                        label += context.parsed.y.toFixed(1) + '% (relative)';
+                        // Show original value
+                        if (metricConfig && metricConfig.key === 'fluid_ml') {
+                          label += ' | Actual: ' + Math.round(originalValue) + ' ml';
+                        } else if (metricConfig && metricConfig.key === 'accidents') {
+                          label += ' | Actual: ' + Math.round(originalValue);
+                        } else {
+                          label += ' | Actual: ' + originalValue.toFixed(1);
+                          if (metricConfig && metricConfig.max) {
+                            label += ' (max possible: ' + metricConfig.max + ')';
+                          }
+                        }
+                        // Show what the max was for this metric
+                        if (maxValue !== null && maxValue !== undefined) {
+                          label += ' | Max in period: ' + maxValue.toFixed(1);
+                        }
+                      } else {
+                        label += '—';
+                      }
+                    }
+                  } else {
+                    label += '—';
+                  }
+                  return label;
                 },
               },
+              // Make tooltip show all data properly
+              padding: 10,
+              titleFont: { size: 13, weight: 'bold' },
+              bodyFont: { size: 11 },
+              displayColors: true,
+              boxWidth: 14,
+              boxHeight: 14,
+              // Ensure all items are shown - don't filter any
+              filter: function(tooltipItem) {
+                return true; // Show all items
+              },
+              // Increase max width significantly
+              titleMaxWidth: 400,
+              bodyMaxWidth: 400,
+              // Set item sort to show all items
+              itemSort: function(a, b) {
+                return 0; // Don't sort, show in dataset order
+              },
+              // Don't limit the number of items - show all datasets
+              mode: 'index',
+              intersect: false,
+              // Ensure tooltip can grow to show all items
+              rtl: false,
+              // Position tooltip to avoid clipping - allow it to go outside canvas
+              position: 'nearest',
+              // Don't clip tooltip content
+              clip: false,
+            },
+            legend: {
+              display: true,
+              position: 'top',
+              onClick: function(e, legendItem) {
+                // Allow toggling datasets
+                const index = legendItem.datasetIndex;
+                const chart = this.chart;
+                const meta = chart.getDatasetMeta(index);
+                meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
+                chart.update();
+              }
             },
           },
         },
       });
+      
+      // Generate and display insights
+      const allLineMetrics = [lineMetric, lineMetric2, lineMetric3, lineMetric4].filter(m => m !== null);
+      displayInsights(features, allLineMetrics);
+      
     } catch (err) {
-      console.error('Failed to build toilet vs fluid chart:', err);
+        console.error('Chart initialization error:', err);
+        canvas.parentElement.innerHTML = '<div class="alert alert-danger">Error loading chart data.</div>';
+      }
     }
+
+    function generateInsights(features, lineMetrics) {
+      if (!features || features.length === 0) return [];
+      
+      const insights = [];
+      
+      // Helper function to calculate average
+      const avg = (arr) => {
+        const valid = arr.filter(v => v !== null && v !== undefined);
+        return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
+      };
+      
+      // Helper function to round to 1 decimal
+      const round = (val) => val !== null ? Math.round(val * 10) / 10 : null;
+      
+      // Analyze each line metric
+      lineMetrics.forEach((metric, index) => {
+        if (!metric) return;
+        
+        const values = features.map(row => metric.extract(row)).filter(v => v !== null && v !== undefined);
+        if (values.length === 0) return;
+        
+        const avgValue = avg(values);
+        const sorted = [...values].sort((a, b) => a - b);
+        const median = sorted[Math.floor(sorted.length / 2)];
+        const p25 = sorted[Math.floor(sorted.length * 0.25)];
+        const p75 = sorted[Math.floor(sorted.length * 0.75)];
+        
+        // Identify high and low days
+        const highThreshold = p75;
+        const lowThreshold = p25;
+        
+        const highDays = features.filter(row => {
+          const val = metric.extract(row);
+          return val !== null && val !== undefined && val >= highThreshold;
+        });
+        
+        const lowDays = features.filter(row => {
+          const val = metric.extract(row);
+          return val !== null && val !== undefined && val <= lowThreshold;
+        });
+        
+        // Generate insights for this metric
+        const metricInsights = [];
+        
+        // Basic stats
+        metricInsights.push(`Average ${round(avgValue)}${metric.suffix || ''} across ${values.length} days.`);
+        
+        // Compare high vs low days
+        if (highDays.length > 0 && lowDays.length > 0) {
+          // Toilet attempts comparison
+          const highToiletAttempts = avg(highDays.map(d => d.toilet_attempts || 0));
+          const lowToiletAttempts = avg(lowDays.map(d => d.toilet_attempts || 0));
+          if (highToiletAttempts > 0 && lowToiletAttempts > 0) {
+            const diff = round(highToiletAttempts - lowToiletAttempts);
+            if (Math.abs(diff) > 0.5) {
+              if (diff > 0) {
+                metricInsights.push(`On high ${metric.label} days, there were ${round(highToiletAttempts)} toilet attempts on average, compared to ${round(lowToiletAttempts)} on low days.`);
+              } else {
+                metricInsights.push(`On low ${metric.label} days, there were ${round(lowToiletAttempts)} toilet attempts on average, compared to ${round(highToiletAttempts)} on high days.`);
+              }
+            }
+          }
+          
+          // Fluid intake comparison
+          const highFluid = avg(highDays.map(d => d.fluid_ml || 0));
+          const lowFluid = avg(lowDays.map(d => d.fluid_ml || 0));
+          if (highFluid > 0 && lowFluid > 0) {
+            const diff = round(highFluid - lowFluid);
+            if (Math.abs(diff) > 50) {
+              if (diff > 0) {
+                metricInsights.push(`High ${metric.label} days had ${round(highFluid)}ml average fluid intake, while low days had ${round(lowFluid)}ml.`);
+              } else {
+                metricInsights.push(`Low ${metric.label} days had ${round(lowFluid)}ml average fluid intake, while high days had ${round(highFluid)}ml.`);
+              }
+            }
+          }
+          
+          // Fluid intake distribution analysis
+          const highFluidValues = highDays.map(d => d.fluid_ml || 0).filter(v => v > 0);
+          const lowFluidValues = lowDays.map(d => d.fluid_ml || 0).filter(v => v > 0);
+          
+          if (highFluidValues.length > 0 || lowFluidValues.length > 0) {
+            // Calculate ranges: <200ml, 200-500ml, 500-1000ml, >1000ml
+            const categorizeFluid = (ml) => {
+              if (ml < 200) return '<200ml';
+              if (ml < 500) return '200-500ml';
+              if (ml < 1000) return '500-1000ml';
+              return '>1000ml';
+            };
+            
+            const highFluidRanges = {};
+            const lowFluidRanges = {};
+            
+            highFluidValues.forEach(ml => {
+              const range = categorizeFluid(ml);
+              highFluidRanges[range] = (highFluidRanges[range] || 0) + 1;
+            });
+            
+            lowFluidValues.forEach(ml => {
+              const range = categorizeFluid(ml);
+              lowFluidRanges[range] = (lowFluidRanges[range] || 0) + 1;
+            });
+            
+            // Get fluid range distribution for high days
+            const highFluidSorted = Object.entries(highFluidRanges)
+              .sort((a, b) => {
+                // Sort by range order: <200ml, 200-500ml, 500-1000ml, >1000ml
+                const order = {'<200ml': 1, '200-500ml': 2, '500-1000ml': 3, '>1000ml': 4};
+                return (order[a[0]] || 5) - (order[b[0]] || 5);
+              })
+              .map(([range, count]) => `${range} (${count})`)
+              .join(', ');
+            
+            // Get fluid range distribution for low days
+            const lowFluidSorted = Object.entries(lowFluidRanges)
+              .sort((a, b) => {
+                const order = {'<200ml': 1, '200-500ml': 2, '500-1000ml': 3, '>1000ml': 4};
+                return (order[a[0]] || 5) - (order[b[0]] || 5);
+              })
+              .map(([range, count]) => `${range} (${count})`)
+              .join(', ');
+            
+            if (highFluidSorted || lowFluidSorted) {
+              let fluidRangeText = 'Fluid intake ranges on high days: ';
+              if (highFluidSorted) {
+                fluidRangeText += highFluidSorted;
+              } else {
+                fluidRangeText += 'none logged';
+              }
+              fluidRangeText += '. On low days: ';
+              if (lowFluidSorted) {
+                fluidRangeText += lowFluidSorted;
+              } else {
+                fluidRangeText += 'none logged';
+              }
+              fluidRangeText += '.';
+              metricInsights.push(fluidRangeText);
+            }
+          }
+          
+          // Accidents comparison
+          const highAccidents = avg(highDays.map(d => d.accidents || 0));
+          const lowAccidents = avg(lowDays.map(d => d.accidents || 0));
+          if (highAccidents !== lowAccidents) {
+            metricInsights.push(`On high ${metric.label} days, accidents averaged ${round(highAccidents)}, compared to ${round(lowAccidents)} on low days.`);
+          }
+          
+          // Mood comparison
+          const highMood = avg(highDays.map(d => d.mood_avg));
+          const lowMood = avg(lowDays.map(d => d.mood_avg));
+          if (highMood !== null && lowMood !== null) {
+            metricInsights.push(`Mood averaged ${round(highMood)} on high ${metric.label} days vs ${round(lowMood)} on low days.`);
+          }
+          
+          // Sleep comparison
+          const highSleep = avg(highDays.map(d => d.sleep_avg));
+          const lowSleep = avg(lowDays.map(d => d.sleep_avg));
+          if (highSleep !== null && lowSleep !== null) {
+            metricInsights.push(`Sleep quality averaged ${round(highSleep)} on high ${metric.label} days vs ${round(lowSleep)} on low days.`);
+          }
+          
+          // Communication comparison
+          const highComm = avg(highDays.map(d => d.communication_avg));
+          const lowComm = avg(lowDays.map(d => d.communication_avg));
+          if (highComm !== null && lowComm !== null) {
+            metricInsights.push(`Communication averaged ${round(highComm)} on high ${metric.label} days vs ${round(lowComm)} on low days.`);
+          }
+          
+          // Food entries comparison
+          const highFood = avg(highDays.map(d => {
+            if (d.food_count !== null && d.food_count !== undefined) return d.food_count;
+            if (d.food_types && Array.isArray(d.food_types)) return d.food_types.length;
+            return 0;
+          }));
+          const lowFood = avg(lowDays.map(d => {
+            if (d.food_count !== null && d.food_count !== undefined) return d.food_count;
+            if (d.food_types && Array.isArray(d.food_types)) return d.food_types.length;
+            return 0;
+          }));
+          if (highFood !== null && lowFood !== null && (highFood > 0 || lowFood > 0)) {
+            metricInsights.push(`Food logging averaged ${round(highFood)} entries on high ${metric.label} days vs ${round(lowFood)} on low days.`);
+            
+            // Food types analysis
+            const highFoodTypes = {};
+            const lowFoodTypes = {};
+            
+            highDays.forEach(d => {
+              if (d.food_types && Array.isArray(d.food_types)) {
+                d.food_types.forEach(type => {
+                  highFoodTypes[type] = (highFoodTypes[type] || 0) + 1;
+                });
+              }
+            });
+            
+            lowDays.forEach(d => {
+              if (d.food_types && Array.isArray(d.food_types)) {
+                d.food_types.forEach(type => {
+                  lowFoodTypes[type] = (lowFoodTypes[type] || 0) + 1;
+                });
+              }
+            });
+            
+            // Get top food types for high days
+            const highFoodSorted = Object.entries(highFoodTypes)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 5)
+              .map(([type, count]) => `${type} (${count})`)
+              .join(', ');
+            
+            // Get top food types for low days
+            const lowFoodSorted = Object.entries(lowFoodTypes)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 5)
+              .map(([type, count]) => `${type} (${count})`)
+              .join(', ');
+            
+            if (highFoodSorted || lowFoodSorted) {
+              let foodTypeText = 'Food types on high days: ';
+              if (highFoodSorted) {
+                foodTypeText += highFoodSorted;
+              } else {
+                foodTypeText += 'none logged';
+              }
+              foodTypeText += '. On low days: ';
+              if (lowFoodSorted) {
+                foodTypeText += lowFoodSorted;
+              } else {
+                foodTypeText += 'none logged';
+              }
+              foodTypeText += '.';
+              metricInsights.push(foodTypeText);
+            }
+          }
+          
+          // Motor skills comparison
+          const highMotor = avg(highDays.map(d => d.motor_avg));
+          const lowMotor = avg(lowDays.map(d => d.motor_avg));
+          if (highMotor !== null && lowMotor !== null) {
+            metricInsights.push(`Motor skills averaged ${round(highMotor)} on high ${metric.label} days vs ${round(lowMotor)} on low days.`);
+          }
+          
+          // Toilet success rate comparison (only if not already analyzing toilet success)
+          if (metric.key !== 'toilet_success_rate') {
+            const highToiletSuccess = avg(highDays.map(d => d.toilet_success_rate));
+            const lowToiletSuccess = avg(lowDays.map(d => d.toilet_success_rate));
+            if (highToiletSuccess !== null && lowToiletSuccess !== null) {
+              metricInsights.push(`Toilet success rate averaged ${round(highToiletSuccess)}% on high ${metric.label} days vs ${round(lowToiletSuccess)}% on low days.`);
+            }
+            
+            // Toilet attempts comparison
+            const highToiletAttempts = avg(highDays.map(d => d.toilet_attempts || 0));
+            const lowToiletAttempts = avg(lowDays.map(d => d.toilet_attempts || 0));
+            if (highToiletAttempts > 0 && lowToiletAttempts > 0) {
+              const diff = round(highToiletAttempts - lowToiletAttempts);
+              if (Math.abs(diff) > 0.5) {
+                if (diff > 0) {
+                  metricInsights.push(`On high ${metric.label} days, there were ${round(highToiletAttempts)} toilet attempts on average, compared to ${round(lowToiletAttempts)} on low days.`);
+                } else {
+                  metricInsights.push(`On low ${metric.label} days, there were ${round(lowToiletAttempts)} toilet attempts on average, compared to ${round(highToiletAttempts)} on high days.`);
+                }
+              }
+            }
+          }
+        }
+        
+        // Success rate insights (if analyzing toilet success)
+        if (metric.key === 'toilet_success_rate') {
+          const successDays = features.filter(d => {
+            const val = metric.extract(d);
+            return val !== null && val !== undefined && val >= 60; // 60% success
+          });
+          const lowSuccessDays = features.filter(d => {
+            const val = metric.extract(d);
+            return val !== null && val !== undefined && val < 40; // <40% success
+          });
+          
+          if (successDays.length > 0 && lowSuccessDays.length > 0) {
+            // Toilet attempts
+            const successAttempts = avg(successDays.map(d => d.toilet_attempts || 0));
+            const lowAttempts = avg(lowSuccessDays.map(d => d.toilet_attempts || 0));
+            if (successAttempts > 0 && lowAttempts > 0) {
+              metricInsights.push(`<strong>Key Finding:</strong> On successful toilet days (≥60% success), there were an average of ${round(successAttempts)} toilet attempts. On low success days (<40%), there were only ${round(lowAttempts)} attempts. This suggests more frequent attempts may lead to better success.`);
+            }
+            
+            // Fluid intake
+            const successFluid = avg(successDays.map(d => d.fluid_ml || 0));
+            const lowFluid = avg(lowSuccessDays.map(d => d.fluid_ml || 0));
+            if (successFluid > 0 && lowFluid > 0 && Math.abs(successFluid - lowFluid) > 50) {
+              metricInsights.push(`<strong>Key Finding:</strong> Successful days had ${round(successFluid)}ml average fluid intake, while low success days had ${round(lowFluid)}ml. Adequate hydration appears important for success.`);
+            }
+            
+            // Fluid intake distribution analysis
+            const successFluidValues = successDays.map(d => d.fluid_ml || 0).filter(v => v > 0);
+            const lowFluidValues = lowSuccessDays.map(d => d.fluid_ml || 0).filter(v => v > 0);
+            
+            if (successFluidValues.length > 0 || lowFluidValues.length > 0) {
+              // Calculate ranges: <200ml, 200-500ml, 500-1000ml, >1000ml
+              const categorizeFluid = (ml) => {
+                if (ml < 200) return '<200ml';
+                if (ml < 500) return '200-500ml';
+                if (ml < 1000) return '500-1000ml';
+                return '>1000ml';
+              };
+              
+              const successFluidRanges = {};
+              const lowFluidRanges = {};
+              
+              successFluidValues.forEach(ml => {
+                const range = categorizeFluid(ml);
+                successFluidRanges[range] = (successFluidRanges[range] || 0) + 1;
+              });
+              
+              lowFluidValues.forEach(ml => {
+                const range = categorizeFluid(ml);
+                lowFluidRanges[range] = (lowFluidRanges[range] || 0) + 1;
+              });
+              
+              // Get fluid range distribution for successful days
+              const successFluidSorted = Object.entries(successFluidRanges)
+                .sort((a, b) => {
+                  // Sort by range order: <200ml, 200-500ml, 500-1000ml, >1000ml
+                  const order = {'<200ml': 1, '200-500ml': 2, '500-1000ml': 3, '>1000ml': 4};
+                  return (order[a[0]] || 5) - (order[b[0]] || 5);
+                })
+                .map(([range, count]) => `${range} (${count})`)
+                .join(', ');
+              
+              // Get fluid range distribution for low success days
+              const lowFluidSorted = Object.entries(lowFluidRanges)
+                .sort((a, b) => {
+                  const order = {'<200ml': 1, '200-500ml': 2, '500-1000ml': 3, '>1000ml': 4};
+                  return (order[a[0]] || 5) - (order[b[0]] || 5);
+                })
+                .map(([range, count]) => `${range} (${count})`)
+                .join(', ');
+              
+              if (successFluidSorted || lowFluidSorted) {
+                let fluidRangeText = '<strong>Fluid intake ranges:</strong> On successful days: ';
+                if (successFluidSorted) {
+                  fluidRangeText += successFluidSorted;
+                } else {
+                  fluidRangeText += 'none logged';
+                }
+                fluidRangeText += '. On low success days: ';
+                if (lowFluidSorted) {
+                  fluidRangeText += lowFluidSorted;
+                } else {
+                  fluidRangeText += 'none logged';
+                }
+                fluidRangeText += '.';
+                metricInsights.push(fluidRangeText);
+              }
+            }
+            
+            // Mood
+            const successMood = avg(successDays.map(d => d.mood_avg));
+            const lowMood = avg(lowSuccessDays.map(d => d.mood_avg));
+            if (successMood !== null && lowMood !== null) {
+              metricInsights.push(`<strong>Key Finding:</strong> Mood averaged ${round(successMood)} on successful days vs ${round(lowMood)} on low success days. Higher mood may contribute to better toilet success.`);
+            }
+            
+            // Sleep
+            const successSleep = avg(successDays.map(d => d.sleep_avg));
+            const lowSleep = avg(lowSuccessDays.map(d => d.sleep_avg));
+            if (successSleep !== null && lowSleep !== null) {
+              metricInsights.push(`<strong>Key Finding:</strong> Sleep quality averaged ${round(successSleep)} on successful days vs ${round(lowSleep)} on low success days. Better sleep may support toilet success.`);
+            }
+            
+            // Communication
+            const successComm = avg(successDays.map(d => d.communication_avg));
+            const lowComm = avg(lowSuccessDays.map(d => d.communication_avg));
+            if (successComm !== null && lowComm !== null) {
+              metricInsights.push(`<strong>Key Finding:</strong> Communication averaged ${round(successComm)} on successful days vs ${round(lowComm)} on low success days.`);
+            }
+            
+            // Motor Skills
+            const successMotor = avg(successDays.map(d => d.motor_avg));
+            const lowMotor = avg(lowSuccessDays.map(d => d.motor_avg));
+            if (successMotor !== null && lowMotor !== null) {
+              metricInsights.push(`<strong>Key Finding:</strong> Motor skills averaged ${round(successMotor)} on successful days vs ${round(lowMotor)} on low success days.`);
+            }
+            
+            // Food entries
+            const successFood = avg(successDays.map(d => {
+              if (d.food_count !== null && d.food_count !== undefined) return d.food_count;
+              if (d.food_types && Array.isArray(d.food_types)) return d.food_types.length;
+              return 0;
+            }));
+            const lowFood = avg(lowSuccessDays.map(d => {
+              if (d.food_count !== null && d.food_count !== undefined) return d.food_count;
+              if (d.food_types && Array.isArray(d.food_types)) return d.food_types.length;
+              return 0;
+            }));
+            if (successFood !== null && lowFood !== null && (successFood > 0 || lowFood > 0)) {
+              metricInsights.push(`<strong>Key Finding:</strong> Food logging averaged ${round(successFood)} entries on successful days vs ${round(lowFood)} on low success days. Regular meal tracking may correlate with better outcomes.`);
+              
+              // Food types analysis
+              const successFoodTypes = {};
+              const lowFoodTypes = {};
+              
+              successDays.forEach(d => {
+                if (d.food_types && Array.isArray(d.food_types)) {
+                  d.food_types.forEach(type => {
+                    successFoodTypes[type] = (successFoodTypes[type] || 0) + 1;
+                  });
+                }
+              });
+              
+              lowSuccessDays.forEach(d => {
+                if (d.food_types && Array.isArray(d.food_types)) {
+                  d.food_types.forEach(type => {
+                    lowFoodTypes[type] = (lowFoodTypes[type] || 0) + 1;
+                  });
+                }
+              });
+              
+              // Get top food types for successful days
+              const successFoodSorted = Object.entries(successFoodTypes)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5)
+                .map(([type, count]) => `${type} (${count})`)
+                .join(', ');
+              
+              // Get top food types for low success days
+              const lowFoodSorted = Object.entries(lowFoodTypes)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5)
+                .map(([type, count]) => `${type} (${count})`)
+                .join(', ');
+              
+              if (successFoodSorted || lowFoodSorted) {
+                let foodTypeText = '<strong>Food types:</strong> On successful days: ';
+                if (successFoodSorted) {
+                  foodTypeText += successFoodSorted;
+                } else {
+                  foodTypeText += 'none logged';
+                }
+                foodTypeText += '. On low success days: ';
+                if (lowFoodSorted) {
+                  foodTypeText += lowFoodSorted;
+                } else {
+                  foodTypeText += 'none logged';
+                }
+                foodTypeText += '.';
+                metricInsights.push(foodTypeText);
+              }
+            }
+            
+            // Accidents
+            const successAccidents = avg(successDays.map(d => d.accidents || 0));
+            const lowAccidents = avg(lowSuccessDays.map(d => d.accidents || 0));
+            if (successAccidents !== lowAccidents) {
+              metricInsights.push(`<strong>Key Finding:</strong> Accidents averaged ${round(successAccidents)} on successful days vs ${round(lowAccidents)} on low success days.`);
+            }
+          }
+        }
+        
+        // Accident insights
+        if (metric.key === 'accidents') {
+          const accidentDays = features.filter(d => (d.accidents || 0) > 0);
+          const noAccidentDays = features.filter(d => (d.accidents || 0) === 0);
+          
+          if (accidentDays.length > 0 && noAccidentDays.length > 0) {
+            const accidentAttempts = avg(accidentDays.map(d => d.toilet_attempts || 0));
+            const noAccidentAttempts = avg(noAccidentDays.map(d => d.toilet_attempts || 0));
+            if (accidentAttempts > 0 && noAccidentAttempts > 0) {
+              metricInsights.push(`<strong>Key Finding:</strong> On days with accidents, there were only ${round(accidentAttempts)} toilet attempts on average, compared to ${round(noAccidentAttempts)} on accident-free days. More frequent toilet attempts may help prevent accidents.`);
+            }
+            
+            const accidentFluid = avg(accidentDays.map(d => d.fluid_ml || 0));
+            const noAccidentFluid = avg(noAccidentDays.map(d => d.fluid_ml || 0));
+            if (accidentFluid > 0 && noAccidentFluid > 0 && Math.abs(accidentFluid - noAccidentFluid) > 50) {
+              metricInsights.push(`<strong>Key Finding:</strong> Accident days had ${round(accidentFluid)}ml average fluid intake, while accident-free days had ${round(noAccidentFluid)}ml.`);
+            }
+          }
+        }
+        
+        if (metricInsights.length > 0) {
+          insights.push({
+            metric: metric.label,
+            points: metricInsights
+          });
+        }
+      });
+      
+      return insights;
+    }
+
+    function displayInsights(features, lineMetrics) {
+      const insights = generateInsights(features, lineMetrics);
+      const analysisDiv = document.getElementById('graphAnalysis');
+      const contentDiv = document.getElementById('analysisContent');
+      
+      if (insights.length === 0) {
+        analysisDiv.style.display = 'none';
+        return;
+      }
+      
+      analysisDiv.style.display = 'block';
+      
+      let html = '<div class="row">';
+      
+      insights.forEach((insight, idx) => {
+        html += `<div class="col-md-6 mb-3">`;
+        html += `<div class="card border-primary h-100">`;
+        html += `<div class="card-body">`;
+        html += `<h6 class="card-title text-primary"><strong>${insight.metric}</strong></h6>`;
+        html += `<ul class="mb-0">`;
+        insight.points.forEach(point => {
+          html += `<li>${point}</li>`;
+        });
+        html += `</ul>`;
+        html += `</div></div></div>`;
+        
+        // Start new row every 2 items
+        if ((idx + 1) % 2 === 0 && idx < insights.length - 1) {
+          html += '</div><div class="row">';
+        }
+      });
+      
+      html += '</div>';
+      contentDiv.innerHTML = html;
+    }
+
+  // Initialize chart on page load
+  (async function initChart() {
+    await updateChart();
   })();
+
+  function updateDateRange() {
+    // When custom dates are selected, set dropdown to custom
+    const startDate = document.getElementById('start_date').value;
+    const endDate = document.getElementById('end_date').value;
+    if (startDate && endDate) {
+      document.getElementById('date_range').value = 'custom';
+    }
+  }
+
+  function updateDateInputs() {
+    const dateRange = document.getElementById('date_range').value;
+    const endDateInput = document.getElementById('end_date');
+    const startDateInput = document.getElementById('start_date');
+    
+    if (dateRange !== 'custom') {
+      // Calculate dates based on selected range
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - parseInt(dateRange));
+      
+      // Format dates as YYYY-MM-DD
+      const formatDate = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+      
+      endDateInput.value = formatDate(endDate);
+      startDateInput.value = formatDate(startDate);
+    }
+  }
+
+  // Ensure tooltip shows all items - add after chart is created
+  function setupTooltipScrolling() {
+    // Use MutationObserver to watch for tooltip creation
+    const observer = new MutationObserver(function(mutations) {
+      const tooltipEl = document.querySelector('.chartjs-tooltip');
+      if (tooltipEl) {
+        tooltipEl.style.maxHeight = '600px';
+        tooltipEl.style.overflowY = 'auto';
+        tooltipEl.style.overflowX = 'hidden';
+        tooltipEl.style.maxWidth = '450px';
+        tooltipEl.style.minWidth = '380px';
+        tooltipEl.style.borderRadius = '8px';
+        tooltipEl.style.padding = '12px';
+        // Also style the body
+        const tooltipBody = tooltipEl.querySelector('.chartjs-tooltip-body');
+        if (tooltipBody) {
+          tooltipBody.style.maxHeight = '550px';
+          tooltipBody.style.overflowY = 'auto';
+          tooltipBody.style.padding = '4px 0';
+        }
+        // Style individual items
+        const items = tooltipEl.querySelectorAll('.chartjs-tooltip-body-item');
+        items.forEach(item => {
+          item.style.fontSize = '11px';
+          item.style.lineHeight = '1.6';
+          item.style.padding = '2px 0';
+        });
+      }
+    });
+    
+    // Observe the document body for tooltip creation
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+    
+    // Also check immediately and periodically
+    setTimeout(function() {
+      const tooltipEl = document.querySelector('.chartjs-tooltip');
+      if (tooltipEl) {
+        tooltipEl.style.maxHeight = '600px';
+        tooltipEl.style.overflowY = 'auto';
+        tooltipEl.style.overflowX = 'hidden';
+        tooltipEl.style.maxWidth = '450px';
+        tooltipEl.style.minWidth = '380px';
+        tooltipEl.style.borderRadius = '8px';
+      }
+    }, 500);
+  }
+  
+  // Initialize date inputs on page load
+  document.addEventListener('DOMContentLoaded', function() {
+    setupTooltipScrolling();
+    const dateRange = document.getElementById('date_range').value;
+    if (dateRange !== 'custom' && !document.getElementById('start_date').value) {
+      updateDateInputs();
+    }
+  });
+</script>
+
+  <!-- Bootstrap JS Bundle (includes Popper for tooltips) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  
+  <!-- Initialize Bootstrap tooltips -->
+  <script>
+    // Initialize all tooltips on the page
+    document.addEventListener('DOMContentLoaded', function() {
+      // Initialize health/medical tooltips
+      var healthTooltips = document.querySelectorAll('[data-health-tooltip]');
+      healthTooltips.forEach(function(el) {
+        var content = el.getAttribute('data-health-tooltip');
+        new bootstrap.Tooltip(el, {
+          html: true,
+          placement: 'top',
+          title: content
+        });
+      });
+      
+      // Initialize food tooltips
+      var foodTooltips = document.querySelectorAll('[data-food-tooltip]');
+      foodTooltips.forEach(function(el) {
+        var content = el.getAttribute('data-food-tooltip');
+        new bootstrap.Tooltip(el, {
+          html: true,
+          placement: 'top',
+          title: content
+        });
+      });
+    });
 </script>
 </html>
 

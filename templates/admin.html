@@ -2,12 +2,18 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
     <div class="container mt-5">
-        <h1>Admin Panel - User Management</h1>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Admin Panel - User Management</h1>
+            <a href="{{ url_for('all_carers_analytics') }}" class="btn btn-primary">
+                📊 All Carers Analytics
+            </a>
+        </div>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -15,6 +21,33 @@
                 {% endfor %}
             {% endif %}
         {% endwith %}
+        
+        <!-- Carer Details Section -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>View Carer Details</h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" action="" id="carerDetailsForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="carer_select" class="form-label">Select Carer:</label>
+                            <select class="form-select" id="carer_select" name="user_id" required>
+                                <option value="">-- Select a carer --</option>
+                                {% for user in users %}
+                                    <option value="{{ user.id }}">{{ user.username }}{% if user.full_name %} - {{ user.full_name }}{% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end">
+                            <button type="button" class="btn btn-primary" id="viewProfileBtn" onclick="viewCarerProfile()" disabled>View Carer Profile</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <h2>User Management</h2>
         <table class="table">
             <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Approved</th><th>Admin</th><th>Actions</th></tr></thead>
             <tbody>
@@ -26,6 +59,7 @@
                         <td>{{ 'Yes' if user.is_approved else 'No' }}</td>
                         <td>{{ 'Yes' if user.is_admin else 'No' }}</td>
                         <td>
+                            <a href="{{ url_for('carer_profile', user_id=user.id) }}" class="btn btn-info btn-sm">View Profile</a>
                             {% if not user.is_approved %}
                                 <form method="POST" action="{{ url_for('approve_user', user_id=user.id) }}" style="display:inline;">
                                     <button type="submit" class="btn btn-success btn-sm">Approve</button>
@@ -47,5 +81,19 @@
         <a href="{{ url_for('view_logs') }}" class="btn btn-secondary">Back to Logs</a>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Enable/disable button based on selection
+        document.getElementById('carer_select').addEventListener('change', function() {
+            document.getElementById('viewProfileBtn').disabled = !this.value;
+        });
+        
+        // View carer profile function
+        function viewCarerProfile() {
+            const userId = document.getElementById('carer_select').value;
+            if (userId) {
+                window.location.href = "{{ url_for('carer_profile', user_id=0) }}".replace('0', userId);
+            }
+        }
+    </script>
 </body>
 </html>

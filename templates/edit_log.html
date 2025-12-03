@@ -144,12 +144,14 @@
             <option value="180" {% if log.duration == "180" %}selected{% endif %}>3 hours</option>
         </select>
 
-        <!-- Simple informational modal for Sleep/Nap -->
+        <!-- Confirmation modal for Sleep/Nap -->
         <div id="sleepNapModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; align-items: center; justify-content: center;">
             <div style="background: white; padding: 30px; border-radius: 10px; max-width: 400px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-                <h5 id="modalTitle" style="margin-bottom: 15px; font-weight: bold;"></h5>
                 <p id="modalMessage" style="font-size: 16px; margin-bottom: 20px; line-height: 1.5;"></p>
-                <button type="button" id="modalOk" style="padding: 10px 30px; font-size: 16px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">OK</button>
+                <div style="display: flex; gap: 15px; justify-content: center;">
+                    <button type="button" id="modalYes" style="padding: 10px 30px; font-size: 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">Yes</button>
+                    <button type="button" id="modalNo" style="padding: 10px 30px; font-size: 16px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">No</button>
+                </div>
             </div>
         </div>
 
@@ -464,31 +466,41 @@ initializeValueSelect();
 valueSelect.addEventListener("change", syncMultiFields);
 syncMultiFields();
 
-// Simple informational modal - just shows a message with OK button
-function showInfoModal(title, message) {
+// Confirmation modal with Yes/No buttons - FIXED with type="button" to prevent form submission
+function customConfirm(message, yesCallback, noCallback) {
     const modal = document.getElementById('sleepNapModal');
-    const titleEl = document.getElementById('modalTitle');
     const messageEl = document.getElementById('modalMessage');
-    const okBtn = document.getElementById('modalOk');
+    const yesBtn = document.getElementById('modalYes');
+    const noBtn = document.getElementById('modalNo');
     
-    if (!modal || !titleEl || !messageEl || !okBtn) {
-        alert(title + '\n\n' + message);
+    if (!modal || !messageEl || !yesBtn || !noBtn) {
+        const result = confirm(message);
+        if (result && yesCallback) yesCallback();
+        if (!result && noCallback) noCallback();
         return;
     }
     
-    titleEl.textContent = title;
     messageEl.textContent = message;
     modal.style.display = 'flex';
     
-    // Remove existing listener by cloning button
-    const newOkBtn = okBtn.cloneNode(true);
-    okBtn.parentNode.replaceChild(newOkBtn, okBtn);
+    // Clone buttons to remove old listeners
+    const newYesBtn = yesBtn.cloneNode(true);
+    const newNoBtn = noBtn.cloneNode(true);
+    yesBtn.parentNode.replaceChild(newYesBtn, yesBtn);
+    noBtn.parentNode.replaceChild(newNoBtn, noBtn);
     
-    // Close modal when OK is clicked
-    newOkBtn.addEventListener('click', function(e) {
+    newYesBtn.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
         modal.style.display = 'none';
+        if (yesCallback) yesCallback();
+    });
+    
+    newNoBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        modal.style.display = 'none';
+        if (noCallback) noCallback();
     });
 }
 
@@ -648,23 +660,48 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Global flag to prevent activity reset while modal is open
-let isModalOpen = false;
+// Global flag to prevent modal from showing again when processing after Yes
+let processingAfterYes = false;
 
 // On activity change, rebuild select and rebind listeners
 activitySelect.addEventListener("change", () => {
     const selectedActivity = activitySelect.value;
     
-    // Show informational modal for Sleep/Nap
-    if (selectedActivity === "Nap Taken") {
-        showInfoModal("Nap Taken", "Remember: This is for daytime naps only. If this is waking up from night sleep, use 'Sleep Quality' instead.");
-        // Continue with normal processing
+    // If we're processing after Yes was clicked, skip modal and go straight to normal processing
+    if (processingAfterYes) {
+        processingAfterYes = false;
+        // Continue with normal processing below
+    } else if (selectedActivity === "Nap Taken") {
+        customConfirm(
+            "Is this really a nap?\n\nClick YES to continue with 'Nap Taken'.\nClick NO to go back to 'Select an Activity'.",
+            function() {
+                // Yes - set flag and trigger normal processing
+                processingAfterYes = true;
+                activitySelect.dispatchEvent(new Event('change'));
+            },
+            function() {
+                // No - reset to empty
+                activitySelect.value = "";
+            }
+        );
+        return; // Stop here, normal code will run after Yes via dispatchEvent
     } else if (selectedActivity === "Sleep Quality") {
-        showInfoModal("Sleep Quality", "Remember: This is for night sleep (waking up from sleep). If this is a daytime nap, use 'Nap Taken' instead.");
-        // Continue with normal processing
+        customConfirm(
+            "Is this really sleep (waking up from night sleep)?\n\nClick YES to continue with 'Sleep Quality'.\nClick NO to go back to 'Select an Activity'.",
+            function() {
+                // Yes - set flag and trigger normal processing
+                processingAfterYes = true;
+                activitySelect.dispatchEvent(new Event('change'));
+            },
+            function() {
+                // No - reset to empty
+                activitySelect.value = "";
+            }
+        );
+        return; // Stop here, normal code will run after Yes via dispatchEvent
     }
     
-    // Normal processing for all activities
+    // Normal processing for all activities (including Sleep/Nap after Yes is clicked)
     showCorrectDurationDropdown(selectedActivity);
     // Pass activity name explicitly to avoid race conditions
     initializeValueSelect(selectedActivity);
