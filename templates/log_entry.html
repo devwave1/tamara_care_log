@@ -66,6 +66,49 @@
        style="z-index:1000; max-height: 280px; overflow:auto; display:none"></div>
   </div>
 
+  <!-- Quick Pick Buttons -->
+  <div class="mb-3">
+    <label class="form-label">Quick Pick:</label>
+    <div class="d-flex flex-wrap gap-2">
+      <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn" 
+              data-activity="Toilet Tries" data-value="1" data-value-type="Tried No Success">
+        🚽 Toilet Try
+      </button>
+      <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn"
+              data-activity="Mood" data-value="3" data-value-type="Okay">
+        😊 Mood Check
+      </button>
+      <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn"
+              data-activity="Health / Medical" data-value="1" data-value-type="Posture - Good/Upright">
+        🧍 Posture Check
+      </button>
+      <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn"
+              data-activity="Health / Medical" data-value="1" data-value-type="Dribbling Moderate">
+        💧 Dribbling
+      </button>
+      <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn"
+              data-activity="Fluid Intake" data-value="3" data-value-type="200ml">
+        🥤 Fluid Intake
+      </button>
+      <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn"
+              data-activity="Food" data-value="2" data-value-type="Protein, Vegetables">
+        🍽️ Food
+      </button>
+      <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn"
+              data-activity="Accidents" data-value="1" data-value-type="Wet">
+        ⚠️ Accident
+      </button>
+      <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn"
+              data-activity="Walking Ability" data-value="2" data-value-type="Independent">
+        🚶 Walking
+      </button>
+      <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn"
+              data-activity="Communication Level" data-value="2" data-value-type="Passive communication Not initiating communication; prompt dependent">
+        💬 Communication
+      </button>
+    </div>
+  </div>
+
 
     <form id="logForm" method="post" enctype="multipart/form-data">
         <label for="activity_name">Activity:</label>
@@ -79,8 +122,7 @@
             <option value="Bath/Shower Completed">Bath/Shower Completed</option>
             <option value="Teeth Brushed">Teeth Brushed</option>
             <option value="Walking Ability">Walking Ability</option>
-            <option value="Fine Motor Skills">Fine Motor Skills</option>
-            <option value="Gross Motor Skills">Gross Motor Skills</option>
+            <option value="Motor Skills">Motor Skills</option>
             <option value="Communication Level">Communication Level</option>
             <option value="Fluid Intake">Fluid Intake</option>
             <option value="Meltdowns">Meltdowns</option>
@@ -114,6 +156,15 @@
               <option>Body language</option>
               <option>Observation/comment</option>
               <option>Visual prompt/gestural cue</option>
+            </select>
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">iPad use</label>
+            <select name="ipad_use" class="form-select">
+              <option value="">—</option>
+              <option value="Yes">Yes</option>
+              <option value="No">No</option>
             </select>
           </div>
 
@@ -241,13 +292,129 @@
         })();
         </script>
 
+        <!-- Simple informational modal for Sleep/Nap -->
+        <div id="sleepNapModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; align-items: center; justify-content: center;">
+            <div style="background: white; padding: 30px; border-radius: 10px; max-width: 400px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+                <h5 id="modalTitle" style="margin-bottom: 15px; font-weight: bold;"></h5>
+                <p id="modalMessage" style="font-size: 16px; margin-bottom: 20px; line-height: 1.5;"></p>
+                <button type="button" id="modalOk" style="padding: 10px 30px; font-size: 16px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">OK</button>
+            </div>
+        </div>
 
+        <script>
+        // Simple informational modal - just shows a message with OK button
+        function showInfoModal(title, message) {
+            const modal = document.getElementById('sleepNapModal');
+            const titleEl = document.getElementById('modalTitle');
+            const messageEl = document.getElementById('modalMessage');
+            const okBtn = document.getElementById('modalOk');
+            
+            if (!modal || !titleEl || !messageEl || !okBtn) {
+                alert(title + '\n\n' + message);
+                return;
+            }
+            
+            titleEl.textContent = title;
+            messageEl.textContent = message;
+            modal.style.display = 'flex';
+            
+            // Remove existing listener by cloning button
+            const newOkBtn = okBtn.cloneNode(true);
+            okBtn.parentNode.replaceChild(newOkBtn, okBtn);
+            
+            // Close modal when OK is clicked
+            newOkBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                modal.style.display = 'none';
+            });
+        }
+        
+        // Helper function to continue setup after activity is confirmed set
+        function continueSetup(activityName) {
+            const activitySelect = document.getElementById("activity_name");
+            if (!activitySelect) return;
+            
+            // Show correct duration dropdown
+            showCorrectDurationDropdown(activityName);
+            
+            // Initialize value select with explicit activity name (not reading from select)
+            initializeValueSelect(activityName);
+            
+            // Rebind listeners
+            valueSelect.addEventListener("change", syncMultiFields);
+            syncMultiFields();
+            
+            // Clone to remove old listeners
+            const newValueSelect = valueSelect.cloneNode(true);
+            valueSelect.parentNode.replaceChild(newValueSelect, valueSelect);
+            valueSelect = newValueSelect;
+            
+            // Re-add change listener
+            valueSelect.addEventListener("change", function () {
+                const selectedOptions = Array.from(valueSelect.selectedOptions);
+                const labels = selectedOptions.map(opt => opt.textContent);
+                valueTypeInput.value = labels.join(", ");
+                if (activitySelect.value === "Exercise / Physical Activity") {
+                    const values = selectedOptions.map(opt => parseFloat(opt.value)).filter(v => !isNaN(v));
+                    const mean = values.length > 0 ? (values.reduce((sum, val) => sum + val, 0) / values.length).toFixed(2) : "";
+                    calculatedValueInput.value = mean;
+                    valueText.value = mean;
+                } else if (activitySelect.value === "Food") {
+                    const count = selectedOptions.length;
+                    calculatedValueInput.value = count > 0 ? count : "";
+                    valueText.value = count > 0 ? count : "";
+                } else {
+                    calculatedValueInput.value = "";
+                    valueText.value = selectedOptions.map(opt => opt.value).join(",");
+                }
+            });
+        }
+        
+        // Helper function to set up activity properly
+        function setupActivityForSleepNap(activityName) {
+            const activitySelect = document.getElementById("activity_name");
+            if (!activitySelect) return;
+            
+            // Explicitly set the activity value FIRST
+            activitySelect.value = activityName;
+            
+            // Activity set, continue with setup immediately (no verification delays)
+            continueSetup(activityName);
+        }
+
+        // Initialize duration dropdown visibility on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const activitySelect = document.getElementById("activity_name");
+            const durationDefault = document.getElementById("duration");
+            const durationSleep = document.getElementById("duration_sleep");
+            const durationNap = document.getElementById("duration_nap");
+            
+            // Set initial state - default duration visible, others hidden
+            if (durationDefault) {
+                durationDefault.style.display = "block";
+                durationDefault.name = "duration";
+                durationDefault.required = true;
+            }
+            if (durationSleep) {
+                durationSleep.style.display = "none";
+                durationSleep.name = "temp";
+                durationSleep.required = false;
+            }
+            if (durationNap) {
+                durationNap.style.display = "none";
+                durationNap.name = "temp";
+                durationNap.required = false;
+            }
+        });
+        </script>
 
         <label for="activity_datetime">Time of Activity:</label>
         <input type="datetime-local" name="activity_datetime" id="activity_datetime"
                value="{{ current_datetime }}" required>
 
         <label for="duration">Duration:</label>
+        <!-- Default duration dropdown (for most activities) -->
         <select name="duration" id="duration" required>
             <option value="5">5 minutes</option>
             <option value="15">15 minutes</option>
@@ -266,6 +433,27 @@
             <option value="180">All Afternoon</option>
             <option value="480">All Night</option>
             <option value="720">All Day</option>
+        </select>
+        <!-- Sleep duration dropdown (longer durations) -->
+        <select name="duration" id="duration_sleep" required style="display: none;">
+            <option value="420">7 hours</option>
+            <option value="480">8 hours</option>
+            <option value="540">9 hours</option>
+            <option value="600">10 hours</option>
+            <option value="660">11 hours</option>
+            <option value="720">12 hours</option>
+            <option value="480" selected>All Night</option>
+        </select>
+        <!-- Nap duration dropdown (shorter durations) -->
+        <select name="duration" id="duration_nap" required style="display: none;">
+            <option value="5">5 minutes</option>
+            <option value="15">15 minutes</option>
+            <option value="30">30 minutes</option>
+            <option value="60">1 hour</option>
+            <option value="90">1.5 hours</option>
+            <option value="120">2 hours</option>
+            <option value="150">2.5 hours</option>
+            <option value="180">3 hours</option>
         </select>
 
         <label>Upload Media (optional):</label>
@@ -288,10 +476,10 @@ const activityValues = {
     { label: "Elated", value: "5" }
   ],
   "Sleep Quality": [
-    { label: "Poor", value: "1" },
-    { label: "Fair", value: "2" },
-    { label: "Good", value: "3" },
-    { label: "Excellent", value: "4" }
+    { label: "7-8 hours", value: "1" },
+    { label: "8-9 hours", value: "2" },
+    { label: "9-10 hours", value: "3" },
+    { label: "10+ hours", value: "4" }
   ],
   "Nap Taken": [
     { label: "Yes", value: "1" },
@@ -320,12 +508,7 @@ const activityValues = {
     { label: "Needs Help", value: "1" },
     { label: "Independent", value: "2" }
   ],
-  "Fine Motor Skills": [
-    { label: "Poor", value: "1" },
-    { label: "Fair", value: "2" },
-    { label: "Good", value: "3" }
-  ],
-  "Gross Motor Skills": [
+  "Motor Skills": [
     { label: "Poor", value: "1" },
     { label: "Fair", value: "2" },
     { label: "Good", value: "3" }
@@ -393,6 +576,10 @@ const activityValues = {
     { label: "Dribbling allot", value: "1" },
     { label: "Dribbling Moderate", value: "1" },
     { label: "Dribbling less", value: "1" },
+    { label: "Posture - Good/Upright", value: "1" },
+    { label: "Posture - Supported/Neutral", value: "1" },
+    { label: "Posture - Leaning/Needs Support", value: "1" },
+    { label: "Posture - Collapsed", value: "1" },
     { label: "Other", value: "1" }
   ]
 };
@@ -431,8 +618,16 @@ function syncMultiFields() {
 }
 
 
-function initializeValueSelect() {
-    const selected = activitySelect.value;
+function initializeValueSelect(activityNameOverride) {
+    // Use override if provided, otherwise read from select (backward compatible)
+    const selected = activityNameOverride || activitySelect.value;
+    
+    // Guard: if no activity selected and no override, don't proceed
+    if (!selected || selected === "") {
+        // Silently return - this prevents errors during race conditions
+        return;
+    }
+    
     const options = activityValues[selected];
 
     valueSelect.innerHTML = "";
@@ -494,8 +689,82 @@ function initializeValueSelect() {
     }
 }
 
+// Helper function to show correct duration dropdown
+function showCorrectDurationDropdown(activity) {
+    const durationDefault = document.getElementById("duration");
+    const durationSleep = document.getElementById("duration_sleep");
+    const durationNap = document.getElementById("duration_nap");
+    
+    // Hide all duration dropdowns first
+    if (durationDefault) durationDefault.style.display = "none";
+    if (durationSleep) durationSleep.style.display = "none";
+    if (durationNap) durationNap.style.display = "none";
+    
+    // Show the appropriate one
+    if (activity === "Sleep Quality") {
+        if (durationSleep) {
+            durationSleep.style.display = "block";
+            durationSleep.required = true;
+            durationSleep.name = "duration";
+        }
+        if (durationDefault) {
+            durationDefault.name = "temp";
+            durationDefault.required = false;
+        }
+        if (durationNap) {
+            durationNap.name = "temp";
+            durationNap.required = false;
+        }
+    } else if (activity === "Nap Taken") {
+        if (durationNap) {
+            durationNap.style.display = "block";
+            durationNap.required = true;
+            durationNap.name = "duration";
+        }
+        if (durationDefault) {
+            durationDefault.name = "temp";
+            durationDefault.required = false;
+        }
+        if (durationSleep) {
+            durationSleep.name = "temp";
+            durationSleep.required = false;
+        }
+    } else {
+        // Default duration for all other activities
+        if (durationDefault) {
+            durationDefault.style.display = "block";
+            durationDefault.required = true;
+            durationDefault.name = "duration";
+        }
+        if (durationSleep) {
+            durationSleep.name = "temp";
+            durationSleep.required = false;
+        }
+        if (durationNap) {
+            durationNap.name = "temp";
+            durationNap.required = false;
+        }
+    }
+}
+
+// Global flag to prevent activity reset while modal is open
+let isModalOpen = false;
+
 activitySelect.addEventListener("change", function () {
-    initializeValueSelect();
+    const selectedActivity = activitySelect.value;
+    
+    // Show informational modal for Sleep/Nap
+    if (selectedActivity === "Nap Taken") {
+        showInfoModal("Nap Taken", "Remember: This is for daytime naps only. If this is waking up from night sleep, use 'Sleep Quality' instead.");
+        // Continue with normal processing
+    } else if (selectedActivity === "Sleep Quality") {
+        showInfoModal("Sleep Quality", "Remember: This is for night sleep (waking up from sleep). If this is a daytime nap, use 'Nap Taken' instead.");
+        // Continue with normal processing
+    }
+    
+    // Normal processing for all activities
+    showCorrectDurationDropdown(selectedActivity);
+    initializeValueSelect(selectedActivity);
     // ensure listener + initial sync on page load
     valueSelect.addEventListener("change", syncMultiFields);
     syncMultiFields();
@@ -664,8 +933,7 @@ const activitySynonyms = {
   "Message for Careers": ["message","note","update","comment","info","heads up"],
   "Fluid Intake": ["water","drink","ml","hydration","fluids","sip","sips","bottle","cups"],
   "Sensory Sensitivities": ["sound","noise","light","touch","movement","sensory","overstimulated","sensitive"],
-  "Fine Motor Skills": ["fine motor","hands","buttons","pencil","cutlery","dexterity"],
-  "Gross Motor Skills": ["gross motor","walking","posture","balance","standing","movement"],
+  "Motor Skills": ["motor","fine motor","gross motor","hands","buttons","pencil","cutlery","dexterity","walking","posture","balance","standing","movement"],
   "Walking Ability": ["walking","gait","mobility","independent","needs help"],
   "Bath/Shower Completed": ["bath","shower","hygiene","wash","clean"],
   "Teeth Brushed": ["teeth","brush","dental","oral care"]
@@ -859,6 +1127,97 @@ function applySuggestion(sug){
   // hide results
   quickFindResults.style.display = 'none';
 }
+
+// ---------- Quick Pick Button Handler ----------
+document.querySelectorAll('.quick-pick-btn').forEach(btn => {
+  // Add scroll to value section after setting values
+  btn.addEventListener('click', function() {
+    const activity = this.dataset.activity;
+    const value = this.dataset.value;
+    const valueType = this.dataset.valueType;
+    
+    // Set activity
+    activitySelect.value = activity;
+    activitySelect.dispatchEvent(new Event('change'));
+    
+    // Wait for value select to populate, then set value
+    setTimeout(() => {
+      // First, try to match by value_type (label) if provided
+      if (valueSelect && valueType) {
+        let matched = false;
+        Array.from(valueSelect.options).forEach(opt => {
+          const optLabel = opt.textContent.trim();
+          if (optLabel === valueType || optLabel.toLowerCase() === valueType.toLowerCase()) {
+            opt.selected = true;
+            matched = true;
+            if (valueSelect.hasAttribute('multiple')) {
+              valueSelect.dispatchEvent(new Event('change'));
+            }
+          }
+        });
+        
+        // If matched by label, sync fields and return
+        if (matched) {
+          syncMultiFields();
+          if (valueSelect && !valueSelect.hasAttribute('multiple')) {
+            valueSelect.dispatchEvent(new Event('change'));
+          }
+          // Scroll to value section
+          const valueContainer = document.getElementById('value-container');
+          if (valueContainer) {
+            valueContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          } else if (valueSelect) {
+            valueSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+          document.getElementById('notes')?.focus();
+          this.style.transform = 'scale(0.95)';
+          setTimeout(() => { this.style.transform = ''; }, 150);
+          return;
+        }
+      }
+      
+      // Fallback: match by value
+      if (valueSelect && value) {
+        Array.from(valueSelect.options).forEach(opt => {
+          if (opt.value === value) {
+            opt.selected = true;
+            if (valueSelect.hasAttribute('multiple')) {
+              valueSelect.dispatchEvent(new Event('change'));
+            }
+          }
+        });
+        syncMultiFields();
+        
+        // Set value_type if provided and not already set
+        if (valueTypeInput && valueType && !valueTypeInput.value) {
+          valueTypeInput.value = valueType;
+        }
+      }
+      
+      // Scroll to value section
+      const valueContainer = document.getElementById('value-container');
+      if (valueContainer) {
+        valueContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (valueSelect) {
+        valueSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (valueText) {
+        valueText.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      
+      // Focus notes field for quick entry
+      const notesField = document.getElementById('notes');
+      if (notesField) {
+        notesField.focus();
+      }
+      
+      // Visual feedback
+      this.style.transform = 'scale(0.95)';
+      setTimeout(() => {
+        this.style.transform = '';
+      }, 150);
+    }, 150);
+  });
+});
 </script>
 
 <script>
