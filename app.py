@@ -64,6 +64,16 @@ def melbourne_time_short_filter(dt):
         return melbourne_dt.strftime('%d %b %Y %I:%M %p')
     return dt.strftime('%d %b %Y %I:%M %p') if dt else ''
 
+@app.template_filter('nl2br')
+def nl2br_filter(text):
+    """Convert newlines to HTML line breaks"""
+    if not text:
+        return ''
+    from markupsafe import Markup, escape
+    # Escape HTML first, then convert newlines to <br>
+    escaped = escape(str(text))
+    return Markup(escaped.replace('\n', '<br>\n'))
+
 # Email utility function
 def send_email(subject, body, to_email=None, html_body=None):
     """
@@ -4350,12 +4360,59 @@ def get_unread_message_count(user_id=None):
     unread_count = len(unread_messages) + len(messages_with_unread_replies)
     return unread_count
 
+def get_unread_swap_request_count():
+    """Get count of pending swap requests where current user is target or requester, or all for admins"""
+    try:
+        if 'carer_id' not in session:
+            return 0
+        
+        user = User.query.filter_by(username=session['carer_id']).first()
+        if not user:
+            return 0
+        
+        tenant_id = get_current_tenant_id()
+        if not tenant_id:
+            return 0
+        
+        is_admin = current_user_is_admin()
+        
+        if is_admin:
+            # Admins see all pending swap requests in their tenant
+            all_pending = ShiftSwapRequest.query.join(Shift, ShiftSwapRequest.shift_id == Shift.id).filter(
+                Shift.tenant_id == tenant_id,
+                ShiftSwapRequest.status == 'pending'
+            ).count()
+            return all_pending
+        else:
+            # Regular users see only requests directed to them or open requests
+            # Count pending swap requests where user is the target carer
+            requests_to_me = ShiftSwapRequest.query.join(Shift, ShiftSwapRequest.shift_id == Shift.id).filter(
+                Shift.tenant_id == tenant_id,
+                ShiftSwapRequest.target_carer_id == user.id,
+                ShiftSwapRequest.status == 'pending'
+            ).count()
+            
+            # Count open requests (no target, but not from current user)
+            open_requests = ShiftSwapRequest.query.join(Shift, ShiftSwapRequest.shift_id == Shift.id).filter(
+                Shift.tenant_id == tenant_id,
+                ShiftSwapRequest.target_carer_id == None,
+                ShiftSwapRequest.status == 'pending',
+                ShiftSwapRequest.requester_id != user.id
+            ).count()
+            
+            return requests_to_me + open_requests
+    except Exception as e:
+        # Return 0 on any error to prevent breaking the header
+        print(f"Error getting swap request count: {e}")
+        return 0
+
 # Make function available to all templates
 @app.context_processor
 def inject_notice_count():
     return dict(
         get_unread_notice_count=get_unread_notice_count,
-        get_unread_message_count=get_unread_message_count
+        get_unread_message_count=get_unread_message_count,
+        get_unread_swap_request_count=get_unread_swap_request_count
     )
 
 def can_access_feature(feature_name):
@@ -6925,8 +6982,10 @@ def request_shift_swap(shift_id):
                         subject=f'Shift Swap Request: {shift.title}',
                         content=f'{user.username} has requested to swap the following shift:\n\n{shift.title}\n{shift.start_datetime.strftime("%d %b %Y at %I:%M %p")}\n\n{message if message else "No message provided"}',
                         sender_id=user.id,
+                        recipient_id=target_carer.id,  # Set recipient_id for backward compatibility
                         tenant_id=tenant_id,
                         message_type='shift_request',
+                        related_shift_id=shift.id,
                         is_urgent=False
                     )
                     db.session.add(dm)
@@ -6934,16 +6993,24 @@ def request_shift_swap(shift_id):
                     recipient = DirectMessageRecipient(message_id=dm.id, recipient_id=target_carer.id)
                     db.session.add(recipient)
             else:
-                # Send to all carers (open request)
-                all_carers = User.query.filter_by(role='carer', is_approved=True).all()
+                # Send to all carers (open request) - filter by tenant
+                from models import TenantAccess
+                tenant_user_ids = [ta.user_id for ta in TenantAccess.query.filter_by(tenant_id=tenant_id).all()]
+                all_carers = User.query.filter(
+                    User.id.in_(tenant_user_ids),
+                    User.role == 'carer',
+                    User.is_approved == True
+                ).all() if tenant_user_ids else []
                 for carer in all_carers:
                     if carer.id != user.id:
                         dm = DirectMessage(
                             subject=f'Open Shift Swap Request: {shift.title}',
                             content=f'{user.username} has requested to swap the following shift:\n\n{shift.title}\n{shift.start_datetime.strftime("%d %b %Y at %I:%M %p")}\n\n{message if message else "No message provided"}',
                             sender_id=user.id,
+                            recipient_id=carer.id,  # Set recipient_id for backward compatibility
                             tenant_id=tenant_id,
                             message_type='shift_request',
+                            related_shift_id=shift.id,
                             is_urgent=False
                         )
                         db.session.add(dm)
@@ -6985,32 +7052,50 @@ def shift_swap_requests():
         flash('Shift swapping is only available for Professional tier subscriptions.', 'error')
         return redirect(url_for('shifts_calendar'))
     
-    # Get requests where user is requester or target
-    my_requests = ShiftSwapRequest.query.join(Shift).filter(
-        Shift.tenant_id == tenant_id,
-        ShiftSwapRequest.requester_id == user.id,
-        ShiftSwapRequest.status == 'pending'
-    ).order_by(ShiftSwapRequest.created_at.desc()).all()
+    is_admin = current_user_is_admin()
     
-    requests_to_me = ShiftSwapRequest.query.join(Shift).filter(
-        Shift.tenant_id == tenant_id,
-        ShiftSwapRequest.target_carer_id == user.id,
-        ShiftSwapRequest.status == 'pending'
-    ).order_by(ShiftSwapRequest.created_at.desc()).all()
-    
-    # Open requests (no target specified)
-    open_requests = ShiftSwapRequest.query.join(Shift).filter(
-        Shift.tenant_id == tenant_id,
-        ShiftSwapRequest.target_carer_id == None,
-        ShiftSwapRequest.status == 'pending',
-        ShiftSwapRequest.requester_id != user.id
-    ).order_by(ShiftSwapRequest.created_at.desc()).all()
-    
-    return render_template('shifts/swap_requests.html',
-                         my_requests=my_requests,
-                         requests_to_me=requests_to_me,
-                         open_requests=open_requests,
-                         user=user)
+    if is_admin:
+        # Admins see all pending swap requests in their tenant
+        all_requests = ShiftSwapRequest.query.join(Shift, ShiftSwapRequest.shift_id == Shift.id).filter(
+            Shift.tenant_id == tenant_id,
+            ShiftSwapRequest.status == 'pending'
+        ).order_by(ShiftSwapRequest.created_at.desc()).all()
+        
+        return render_template('shifts/swap_requests.html',
+                             my_requests=[],
+                             requests_to_me=[],
+                             open_requests=all_requests,
+                             all_requests=all_requests,  # Pass all requests for admin view
+                             user=user,
+                             is_admin=True)
+    else:
+        # Regular users see only requests directed to them or open requests
+        my_requests = ShiftSwapRequest.query.join(Shift, ShiftSwapRequest.shift_id == Shift.id).filter(
+            Shift.tenant_id == tenant_id,
+            ShiftSwapRequest.requester_id == user.id,
+            ShiftSwapRequest.status == 'pending'
+        ).order_by(ShiftSwapRequest.created_at.desc()).all()
+        
+        requests_to_me = ShiftSwapRequest.query.join(Shift, ShiftSwapRequest.shift_id == Shift.id).filter(
+            Shift.tenant_id == tenant_id,
+            ShiftSwapRequest.target_carer_id == user.id,
+            ShiftSwapRequest.status == 'pending'
+        ).order_by(ShiftSwapRequest.created_at.desc()).all()
+        
+        # Open requests (no target specified)
+        open_requests = ShiftSwapRequest.query.join(Shift, ShiftSwapRequest.shift_id == Shift.id).filter(
+            Shift.tenant_id == tenant_id,
+            ShiftSwapRequest.target_carer_id == None,
+            ShiftSwapRequest.status == 'pending',
+            ShiftSwapRequest.requester_id != user.id
+        ).order_by(ShiftSwapRequest.created_at.desc()).all()
+        
+        return render_template('shifts/swap_requests.html',
+                             my_requests=my_requests,
+                             requests_to_me=requests_to_me,
+                             open_requests=open_requests,
+                             user=user,
+                             is_admin=False)
 
 
 @app.route('/shifts/swap-requests/<int:request_id>/approve', methods=['POST'])
@@ -7035,8 +7120,12 @@ def approve_shift_swap(request_id):
         flash('Shift swapping is only available for Professional tier subscriptions.', 'error')
         return redirect(url_for('shift_swap_requests'))
     
-    # Only target carer or admin can approve
-    if swap_request.target_carer_id != user.id and not current_user_is_admin():
+    # Target carer, admin, or anyone for open requests can approve
+    if swap_request.target_carer_id is None:
+        # Open request - anyone can accept
+        pass
+    elif swap_request.target_carer_id != user.id and not current_user_is_admin():
+        # Specific request - only target carer or admin can approve
         flash('You can only approve swap requests directed to you, or you must be an admin.', 'error')
         return redirect(url_for('shift_swap_requests'))
     

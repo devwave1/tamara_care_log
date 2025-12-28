@@ -1,0 +1,147 @@
+{% extends "header.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h1><i class="bi bi-arrow-left-right"></i> Shift Swap Requests</h1>
+    
+    {% if is_admin %}
+        <div class="alert alert-info mb-4">
+            <i class="bi bi-info-circle"></i> <strong>Admin View:</strong> You can see all pending swap requests in your tenant and intervene if needed.
+        </div>
+    {% endif %}
+    
+    <ul class="nav nav-tabs mb-4" id="swapTabs" role="tablist">
+        {% if not is_admin %}
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="to-me-tab" data-bs-toggle="tab" data-bs-target="#to-me" type="button" role="tab">
+                    Requests to Me <span class="badge bg-danger">{{ requests_to_me|length }}</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="my-requests-tab" data-bs-toggle="tab" data-bs-target="#my-requests" type="button" role="tab">
+                    My Requests <span class="badge bg-secondary">{{ my_requests|length }}</span>
+                </button>
+            </li>
+        {% endif %}
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if is_admin %}active{% endif %}" id="open-tab" data-bs-toggle="tab" data-bs-target="#open" type="button" role="tab">
+                {% if is_admin %}All Requests{% else %}Open Requests{% endif %} <span class="badge bg-info">{{ open_requests|length }}</span>
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="swapTabContent">
+        {% if not is_admin %}
+            <!-- Requests to Me -->
+            <div class="tab-pane fade show active" id="to-me" role="tabpanel">
+            {% if requests_to_me %}
+                <div class="list-group">
+                    {% for request in requests_to_me %}
+                        <div class="list-group-item">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h5 class="mb-1">{{ request.shift.title }}</h5>
+                                <small>{{ request.created_at|melbourne_time_short }}</small>
+                            </div>
+                            <p class="mb-1">
+                                <i class="bi bi-clock"></i> {{ request.shift.start_datetime|melbourne_time }} - {{ request.shift.end_datetime|melbourne_time }}
+                            </p>
+                            <p class="mb-1"><strong>From:</strong> {{ request.requester.username }}</p>
+                            {% if request.message %}
+                                <p class="mb-2"><em>{{ request.message }}</em></p>
+                            {% endif %}
+                            <div class="mt-2">
+                                <form method="POST" action="{{ url_for('approve_shift_swap', request_id=request.id) }}" style="display: inline;">
+                                    <button type="submit" class="btn btn-success btn-sm">Approve</button>
+                                </form>
+                                <form method="POST" action="{{ url_for('reject_shift_swap', request_id=request.id) }}" style="display: inline;">
+                                    <button type="submit" class="btn btn-danger btn-sm">Reject</button>
+                                </form>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="alert alert-info">No swap requests directed to you.</div>
+            {% endif %}
+        </div>
+
+        <!-- My Requests -->
+        <div class="tab-pane fade" id="my-requests" role="tabpanel">
+            {% if my_requests %}
+                <div class="list-group">
+                    {% for request in my_requests %}
+                        <div class="list-group-item">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h5 class="mb-1">{{ request.shift.title }}</h5>
+                                <span class="badge bg-warning">Pending</span>
+                            </div>
+                            <p class="mb-1">
+                                <i class="bi bi-clock"></i> {{ request.shift.start_datetime|melbourne_time }} - {{ request.shift.end_datetime|melbourne_time }}
+                            </p>
+                            {% if request.target_carer %}
+                                <p class="mb-1"><strong>To:</strong> {{ request.target_carer.username }}</p>
+                            {% else %}
+                                <p class="mb-1"><strong>To:</strong> All Carers (Open Request)</p>
+                            {% endif %}
+                            {% if request.message %}
+                                <p class="mb-2"><em>{{ request.message }}</em></p>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="alert alert-info">You have no pending swap requests.</div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Open Requests / All Requests (Admin) -->
+        <div class="tab-pane fade {% if is_admin %}show active{% endif %}" id="open" role="tabpanel">
+            {% if open_requests %}
+                <div class="list-group">
+                    {% for request in open_requests %}
+                        <div class="list-group-item">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h5 class="mb-1">{{ request.shift.title }}</h5>
+                                <small>{{ request.created_at|melbourne_time_short }}</small>
+                            </div>
+                            <p class="mb-1">
+                                <i class="bi bi-clock"></i> {{ request.shift.start_datetime|melbourne_time }} - {{ request.shift.end_datetime|melbourne_time }}
+                            </p>
+                            <p class="mb-1"><strong>From:</strong> {{ request.requester.username }}</p>
+                            {% if request.target_carer %}
+                                <p class="mb-1"><strong>To:</strong> {{ request.target_carer.username }}</p>
+                            {% else %}
+                                <p class="mb-1"><strong>To:</strong> <span class="text-muted">All Carers (Open Request)</span></p>
+                            {% endif %}
+                            {% if request.message %}
+                                <p class="mb-2"><em>{{ request.message }}</em></p>
+                            {% endif %}
+                            <div class="mt-2">
+                                {% if is_admin or not request.target_carer or request.target_carer_id == user.id %}
+                                    <form method="POST" action="{{ url_for('approve_shift_swap', request_id=request.id) }}" style="display: inline;">
+                                        <button type="submit" class="btn btn-success btn-sm">{% if is_admin %}Approve{% else %}Accept{% endif %}</button>
+                                    </form>
+                                    {% if is_admin %}
+                                        <form method="POST" action="{{ url_for('reject_shift_swap', request_id=request.id) }}" style="display: inline;">
+                                            <button type="submit" class="btn btn-danger btn-sm">Reject</button>
+                                        </form>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="alert alert-info">{% if is_admin %}No pending swap requests in your tenant.{% else %}No open swap requests available.{% endif %}</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <a href="{{ url_for('shifts_calendar') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Calendar
+        </a>
+    </div>
+</div>
+{% endblock %}
+
