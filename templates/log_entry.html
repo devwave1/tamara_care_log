@@ -1,11 +1,6 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Log Tamara's Activity</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
+{% extends "header.html" %}
+{% block content %}
+<style>
         form { max-width: 600px; margin: auto; background: #f8f8f8; padding: 1px 20px 20px 20px; border-radius: 8px; }
         label { display: block; margin-top: 15px; font-weight: bold; }
         input, select, textarea {
@@ -46,11 +41,17 @@
             cursor: pointer;
         }
         .media-item:hover .remove-btn { display: block; }
-    </style>
-</head>
-<body>
-    {% include 'header.html' %}
+</style>
 
+    <!-- Quick AAC Reminder Banner (dismissible) -->
+    <div class="alert alert-info alert-dismissible fade show" role="alert" style="background-color: #0dcaf0; color: #000; border: 3px solid #0aa2c0; font-weight: 600; margin: 20px; max-width: 1200px; margin-left: auto; margin-right: auto;">
+        <h5 class="alert-heading mb-2">📱 Quick AAC Check - Focused Task Reminder</h5>
+        <p class="mb-2"><strong>Remember:</strong> Use the Quick AAC Check page to log communication events quickly (10 seconds). This is a critical Focused Task for tracking Tamara's progress.</p>
+        <a href="/quick/aac" class="btn btn-primary btn-sm mt-1" style="background-color: #000; border-color: #000;">Go to Quick AAC Check →</a>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+
+<div class="container-fluid mt-4">
     <div class="header">
         <h2>Log New Activity for Tamara</h2>
         <p>Logged in as: {{ session['carer_name'] }}</p>
@@ -67,71 +68,59 @@
   </div>
 
   <!-- Quick Pick Buttons -->
+  {% if quick_picks %}
   <div class="mb-3">
     <label class="form-label">Quick Pick:</label>
     <div class="d-flex flex-wrap gap-2">
-      <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn" 
-              data-activity="Toilet Tries" data-value="1" data-value-type="Tried No Success">
-        🚽 Toilet Try
-      </button>
-      <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn"
-              data-activity="Mood" data-value="3" data-value-type="Okay">
-        😊 Mood Check
-      </button>
-      <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn"
-              data-activity="Health / Medical" data-value="1" data-value-type="Posture - Good/Upright">
-        🧍 Posture Check
-      </button>
-      <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn"
-              data-activity="Health / Medical" data-value="1" data-value-type="Dribbling Moderate">
-        💧 Dribbling
-      </button>
-      <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn"
-              data-activity="Fluid Intake" data-value="3" data-value-type="200ml">
-        🥤 Fluid Intake
-      </button>
-      <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn"
-              data-activity="Food" data-value="2" data-value-type="Protein, Vegetables">
-        🍽️ Food
-      </button>
-      <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn"
-              data-activity="Accidents" data-value="1" data-value-type="Wet">
-        ⚠️ Accident
-      </button>
-      <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn"
-              data-activity="Walking Ability" data-value="2" data-value-type="Independent">
-        🚶 Walking
-      </button>
-      <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn"
-              data-activity="Communication Level" data-value="2" data-value-type="Passive communication Not initiating communication; prompt dependent">
-        💬 Communication
-      </button>
+      {% for qp in quick_picks %}
+        <button type="button" class="btn btn-outline-primary btn-sm quick-pick-btn" 
+                data-activity="{{ qp.activity.name }}"
+                {% if qp.activity_value_id %}
+                  data-value="{{ qp.activity_value.value }}"
+                  data-value-type="{{ qp.activity_value.label }}"
+                {% elif qp.value and qp.value_type %}
+                  data-value="{{ qp.value }}"
+                  data-value-type="{{ qp.value_type }}"
+                {% else %}
+                  {# No value - just select activity #}
+                {% endif %}>
+          {{ qp.button_text }}
+        </button>
+      {% endfor %}
     </div>
   </div>
+  {% endif %}
 
 
     <form id="logForm" method="post" enctype="multipart/form-data">
         <label for="activity_name">Activity:</label>
         <select name="activity_name" id="activity_name" required>
             <option value="">Select an Activity</option>
-            <option value="Mood">Mood</option>
-            <option value="Sleep Quality">Sleep Quality</option>
-            <option value="Nap Taken">Nap Taken</option>
-            <option value="Toilet Tries">Toilet Tries</option>
-            <option value="Accidents">Accidents</option>
-            <option value="Bath/Shower Completed">Bath/Shower Completed</option>
-            <option value="Teeth Brushed">Teeth Brushed</option>
-            <option value="Walking Ability">Walking Ability</option>
-            <option value="Motor Skills">Motor Skills</option>
-            <option value="Communication Level">Communication Level</option>
-            <option value="Fluid Intake">Fluid Intake</option>
-            <option value="Meltdowns">Meltdowns</option>
-            <option value="Sensory Sensitivities">Sensory Sensitivities</option>
-            <option value="Exercise / Physical Activity">Exercise / Physical Activity</option>
-            <option value="Menstrual Cycle">Menstrual Cycle</option>
-            <option value="Food">Food</option>
-            <option value="Message for Careers">Message for Careers</option>
-            <option value="Health / Medical">Health / Medical</option>
+            {% if activities %}
+                {% for activity in activities %}
+                    <option value="{{ activity.name }}">{{ activity.name }}</option>
+                {% endfor %}
+            {% else %}
+                {# Fallback to hardcoded if database not migrated yet #}
+                <option value="Mood">Mood</option>
+                <option value="Sleep Quality">Sleep Quality</option>
+                <option value="Nap Taken">Nap Taken</option>
+                <option value="Toilet Tries">Toilet Tries</option>
+                <option value="Accidents">Accidents</option>
+                <option value="Bath/Shower Completed">Bath/Shower Completed</option>
+                <option value="Teeth Brushed">Teeth Brushed</option>
+                <option value="Walking Ability">Walking Ability</option>
+                <option value="Motor Skills">Motor Skills</option>
+                <option value="Communication Level">Communication Level</option>
+                <option value="Fluid Intake">Fluid Intake</option>
+                <option value="Meltdowns">Meltdowns</option>
+                <option value="Sensory Sensitivities">Sensory Sensitivities</option>
+                <option value="Exercise / Physical Activity">Exercise / Physical Activity</option>
+                <option value="Menstrual Cycle">Menstrual Cycle</option>
+                <option value="Food">Food</option>
+                <option value="Message for Careers">Message for Careers</option>
+                <option value="Health / Medical">Health / Medical</option>
+            {% endif %}
         </select>
 
         <label for="value-select">Value:</label>
@@ -143,6 +132,15 @@
 
         <label for="notes">Notes (optional):</label>
         <textarea name="notes" id="notes"></textarea>
+
+        <div class="mt-3 p-3 border rounded" id="relatedFocusSection" style="display: none;">
+          <label class="form-label"><strong>Related Focus - Will be automatically recorded</strong></label>
+          <div class="border rounded p-3 bg-light" style="max-height: 200px; overflow-y: auto;" id="autoCaptureTasks">
+            <p class="text-muted small mb-0">No matching focused tasks for this activity.</p>
+          </div>
+          <input type="hidden" name="focus_task_id" id="auto_focus_task_id" value="">
+          <input type="hidden" name="focus_as_check" id="auto_focus_as_check" value="on">
+        </div>
 
         <!-- AAC / GAS extras (shown only for Communication Level) -->
         <div id="aacExtras" style="display:none; margin-top:12px; padding:10px; border:1px dashed #ccc; border-radius:6px;">
@@ -299,6 +297,23 @@
                 <div style="display: flex; gap: 15px; justify-content: center;">
                     <button type="button" id="modalYes" style="padding: 10px 30px; font-size: 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">Yes</button>
                     <button type="button" id="modalNo" style="padding: 10px 30px; font-size: 16px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">No</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick AAC Reminder Modal (shows after login) -->
+        <div id="aacReminderModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 10001; align-items: center; justify-content: center;">
+            <div style="background: white; padding: 40px; border-radius: 15px; max-width: 500px; text-align: center; box-shadow: 0 8px 16px rgba(0,0,0,0.4);">
+                <h3 style="color: #0dcaf0; margin-bottom: 20px; font-weight: bold;">📱 Quick AAC Check - Focused Task</h3>
+                <p style="font-size: 18px; margin-bottom: 15px; line-height: 1.6; color: #333;">
+                    <strong>Important:</strong> Remember to log communication events using the Quick AAC Check page.
+                </p>
+                <p style="font-size: 16px; margin-bottom: 25px; line-height: 1.5; color: #666;">
+                    This is a critical Focused Task. Log AAC access rating + focus words modelled every shift (takes 10 seconds).
+                </p>
+                <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+                    <button type="button" id="aacModalGo" style="padding: 12px 30px; font-size: 18px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">Go to Quick AAC Check</button>
+                    <button type="button" id="aacModalLater" style="padding: 12px 30px; font-size: 16px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">I'll do it later</button>
                 </div>
             </div>
         </div>
@@ -479,8 +494,23 @@
     </form>
 
     <script>
+// Activity values loaded from database
 const activityValues = {
-  "Mood": [
+  {% if activities %}
+    {% for activity in activities %}
+      "{{ activity.name|e }}": [
+        {% for value in activity.values|sort(attribute='display_order') %}
+          {
+            label: {{ value.label|tojson }},
+            value: {{ value.value|tojson }}{% if value.description %},
+            description: {{ value.description|tojson }}{% endif %}
+          }{% if not loop.last %},{% endif %}
+        {% endfor %}
+      ]{% if not loop.last %},{% endif %}
+    {% endfor %}
+  {% else %}
+    {# Fallback to hardcoded if database not migrated yet #}
+    "Mood": [
     { label: "Upset", value: "1" },
     { label: "Low", value: "2" },
     { label: "Okay", value: "3" },
@@ -594,6 +624,7 @@ const activityValues = {
     { label: "Posture - Collapsed", value: "1" },
     { label: "Other", value: "1" }
   ]
+  {% endif %}
 };
 
 const activitySelect = document.getElementById("activity_name");
@@ -797,39 +828,29 @@ activitySelect.addEventListener("change", function () {
             }
         );
         return; // Stop here, normal code will run after Yes via dispatchEvent
+    } else if (selectedActivity === "Communication Level") {
+        customConfirm(
+            "Are you using the Quick AAC Check page?\n\nClick YES to go to the Quick AAC Check page (faster logging).\nClick NO to continue with the normal log entry form.",
+            function() {
+                // Yes - redirect to Quick AAC page
+                window.location.href = "/quick/aac";
+            },
+            function() {
+                // No - continue with normal processing
+                processingAfterYes = true;
+                activitySelect.dispatchEvent(new Event('change'));
+            }
+        );
+        return; // Stop here, normal code will run after No via dispatchEvent
     }
     
     // Normal processing for all activities (including Sleep/Nap after Yes is clicked)
     showCorrectDurationDropdown(selectedActivity);
     initializeValueSelect(selectedActivity);
+    
     // ensure listener + initial sync on page load
     valueSelect.addEventListener("change", syncMultiFields);
     syncMultiFields();
-
-    // Remove existing change listeners to prevent duplicates
-    const newValueSelect = valueSelect.cloneNode(true);
-    valueSelect.parentNode.replaceChild(newValueSelect, valueSelect);
-    valueSelect = newValueSelect;
-
-    valueSelect.addEventListener("change", function () {
-        const selectedOptions = Array.from(valueSelect.selectedOptions);
-        const labels = selectedOptions.map(opt => opt.textContent);
-        valueTypeInput.value = labels.join(", ");
-
-        if (activitySelect.value === "Exercise / Physical Activity") {
-            const values = selectedOptions.map(opt => parseFloat(opt.value)).filter(v => !isNaN(v));
-            const mean = values.length > 0 ? (values.reduce((sum, val) => sum + val, 0) / values.length).toFixed(2) : "";
-            calculatedValueInput.value = mean;
-            valueText.value = mean;
-        } else if (activitySelect.value === "Food") {
-            const count = selectedOptions.length;
-            calculatedValueInput.value = count > 0 ? count : "";
-            valueText.value = count > 0 ? count : "";
-        } else {
-            calculatedValueInput.value = "";
-            valueText.value = selectedOptions.map(opt => opt.value).join(",");
-        }
-    });
 });
 
 initializeValueSelect();
@@ -894,10 +915,6 @@ function updatePreviews() {
     });
 }
 
-addMoreBtn.addEventListener("click", function () {
-    mediaInput.click();
-});
-
 // Resize image to maxWidth (keeps aspect ratio)
 function resizeImage(file, maxWidth) {
     return new Promise((resolve) => {
@@ -920,6 +937,10 @@ function resizeImage(file, maxWidth) {
         reader.readAsDataURL(file);
     });
 }
+
+addMoreBtn.addEventListener("click", function () {
+    mediaInput.click();
+});
 
 logForm.addEventListener("submit", function (e) {
   e.preventDefault();
@@ -1177,6 +1198,29 @@ document.querySelectorAll('.quick-pick-btn').forEach(btn => {
     activitySelect.value = activity;
     activitySelect.dispatchEvent(new Event('change'));
     
+    // If no value/valueType provided, just select activity and scroll to value section
+    if (!value && !valueType) {
+      setTimeout(() => {
+        // Scroll to value section so carer can pick
+        const valueContainer = document.getElementById('value-container');
+        if (valueContainer) {
+          valueContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else if (valueSelect) {
+          valueSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        // Focus on value select
+        if (valueSelect && valueSelect.style.display !== 'none') {
+          valueSelect.focus();
+        } else if (valueText && valueText.style.display !== 'none') {
+          valueText.focus();
+        }
+        // Visual feedback
+        this.style.transform = 'scale(0.95)';
+        setTimeout(() => { this.style.transform = ''; }, 150);
+      }, 150);
+      return; // Exit early - no value to set
+    }
+    
     // Wait for value select to populate, then set value
     setTimeout(() => {
       // First, try to match by value_type (label) if provided
@@ -1275,5 +1319,55 @@ document.querySelectorAll('.quick-pick-btn').forEach(btn => {
 </script>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+    
+    <script>
+    // Show Quick AAC Reminder Modal after login
+    // This works with the noticeboard modal - if noticeboard shows, this will show after it closes
+    {% if session.get('just_logged_in') %}
+    document.addEventListener('DOMContentLoaded', function() {
+        const modal = document.getElementById('aacReminderModal');
+        const goBtn = document.getElementById('aacModalGo');
+        const laterBtn = document.getElementById('aacModalLater');
+        const noticeBoardModal = document.getElementById('noticeBoardModal');
+        
+        if (!modal || !goBtn || !laterBtn) return;
+        
+        const showAACModal = function() {
+            modal.style.display = 'flex';
+            
+            goBtn.onclick = function() {
+                window.location.href = '/quick/aac';
+            };
+            
+            laterBtn.onclick = function() {
+                modal.style.display = 'none';
+                // Clear the flag so it doesn't show again this session
+                fetch('/clear-login-flag', { method: 'POST' })
+                    .catch(err => console.error('Error clearing login flag:', err));
+            };
+        };
+        
+        // Check if noticeboard modal exists and is showing
+        if (noticeBoardModal) {
+            // Use a small delay to let noticeboard modal initialize
+            setTimeout(function() {
+                const bsModal = bootstrap.Modal.getInstance(noticeBoardModal);
+                if (bsModal && bsModal._isShown) {
+                    // Noticeboard is showing, wait for it to close
+                    noticeBoardModal.addEventListener('hidden.bs.modal', function() {
+                        // Wait a moment for the noticeboard modal to fully close, then show AAC modal
+                        setTimeout(showAACModal, 500);
+                    }, { once: true }); // Use once so it only fires once
+                } else {
+                    // Noticeboard not showing, show AAC modal immediately
+                    showAACModal();
+                }
+            }, 100); // Small delay to let noticeboard modal initialize
+        } else {
+            // No noticeboard modal exists, show AAC modal immediately
+            showAACModal();
+        }
+    });
+    {% endif %}
+</div>
+{% endblock %}
